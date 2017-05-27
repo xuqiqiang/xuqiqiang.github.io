@@ -1,0 +1,98 @@
+---
+layout:     post
+title:      "S笔记"
+subtitle:   "一款专业而又简单的笔记软件"
+date:       2015-12-29 12:00:00
+author:     "SnailStudio"
+header-img: "img/post-bg-2015.jpg"
+tags:
+    - Android
+---
+
+> “Yeah It's on. ”
+
+
+## 前言
+
+作为一个手机用户，笔记软件是最常用的的APP之一。我用过几乎所有流行的笔记软件，但都不能完全满足我的需求，于是S笔记诞生了。
+
+[**截图预览** ](#build)
+
+![应用图标](/img/snote/icon.png)
+
+这是一款非常用心设计的笔记软件，运行于Android平台，本软件轻巧实用，界面华丽，功能齐全。可以通过打字和手写涂鸦等方式来帮你记录生活中印象深刻的人、事、景、物。如果能够很好地坚持写笔记，你便拥有了一本珍贵的人生纪念册。
+
+本项目是个人独立开发的一款中大型项目，集成了Rxjava、MVP、Dagger2及ButterKnife等框架。
+
+[**下载地址** ](http://shouji.baidu.com/software/9922157.html)
+
+
+---
+
+## 功能介绍
+
+★ 拥有手写、涂鸦和拍照功能;
+
+★ 自动云端同步;
+
+★ 图像识别、语音识别、插入图片功能，方便快速输入;
+
+★ 密码保护功能，有效保护个人隐私;
+
+★ 定时提醒功能;
+
+★ 多种主题风格;
+
+★ 语音阅读功能;
+
+★ QQ微博账号一键登录;
+
+★ 行号、字数显示;
+
+★ 在线字体下载;
+
+★ 一键生成长图并分享;
+
+★ 方便的文件管理机制;
+
+★ 附带最好的txt文本阅读编辑器，可以快速打开、编辑txt格式的文本;
+
+★ 也许你会探索到更多实用的功能;
+
+<p id = "build"></p>
+
+---
+
+## 截图预览
+
+![截图预览](/img/snote/1.png)
+
+![截图预览](/img/snote/3.png)
+
+![截图预览](/img/snote/3.png)
+
+![截图预览](/img/snote/5.png)
+
+![截图预览](/img/snote/7.png)
+
+![截图预览](/img/snote/9.png)
+
+![截图预览](/img/snote/b.png)
+
+![截图预览](/img/snote/d.png)
+
+![截图预览](/img/snote/f.png)
+
+![截图预览](/img/snote/h.png)
+
+![截图预览](/img/snote/j.png)
+
+![截图预览](/img/snote/k.png)
+
+![截图预览](/img/snote/m.png)
+
+![截图预览](/img/snote/o.png)
+
+![截图预览](/img/snote/q.png)
+
+—— SnailStudio 后记于 2017.5

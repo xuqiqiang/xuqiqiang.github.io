@@ -1,0 +1,58 @@
+---
+layout:     post
+title:      "XMPP"
+subtitle:   "基于XMPP协议的即时通信客户端"
+date:       2015-03-25 12:00:00
+author:     "SnailStudio"
+header-img: "img/post-bg-2015.jpg"
+tags:
+    - C++
+    - Android
+---
+
+> “Yeah It's on. ”
+
+
+## 项目介绍
+
+[**截图预览** ](#build)
+
+本项目是基于XMPP远程通信协议的即时通信客户端解决方案，底层通信模块基于Libstrophe，由C++编写，可在Linux系统运行，利用NDK交叉编译，移植到Android、Ios等平台。可实现注册、登录、聊天、设置头像、发送图片、好友管理以及五子棋对战游戏等功能。
+
+[**技术实现** ](https://github.com/xuqiqiang/xmpp)
+
+<p id = "build"></p>
+
+---
+
+## 截图预览
+
+![截图预览](/img/xmpp/1.png)
+
+![截图预览](/img/xmpp/3.png)
+
+![截图预览](/img/xmpp/5.png)
+
+![截图预览](/img/xmpp/7.png)
+
+![截图预览](/img/xmpp/9.png)
+
+![截图预览](/img/xmpp/b.png)
+
+![截图预览](/img/xmpp/d.png)
+
+![截图预览](/img/xmpp/f.png)
+
+![截图预览](/img/xmpp/h.png)
+
+![截图预览](/img/xmpp/j.png)
+
+![截图预览](/img/xmpp/l.png)
+
+![截图预览](/img/xmpp/n.png)
+
+![截图预览](/img/xmpp/o.png)
+
+![截图预览](/img/xmpp/p.png)
+
+—— SnailStudio 后记于 2017.5

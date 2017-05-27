@@ -1,0 +1,46 @@
+---
+layout:     post
+title:      "Html5魂斗罗"
+subtitle:   "基于lufylegend引擎开发的一款横版卷轴游戏"
+date:       2015-01-29 12:00:00
+author:     "SnailStudio"
+header-img: "img/post-bg-2015.jpg"
+tags:
+    - JavaScript
+    - C++
+---
+
+> “Yeah It's on. ”
+
+
+## 前言
+
+这是我模仿经典魂斗罗开发的一款横版卷轴游戏，基于lufylegend引擎。
+
+[**跳过废话，直接玩游戏** ](#build)
+
+lufylegend是一个HTML5开源引擎，它实现了利用仿ActionScript3.0的语法进行HTML5的开发， 包含了LSprite，LBitmapData，LBitmap，LLoader，LURLLoader，LTextField，LEvent等多个AS开发人员熟悉的类， 支持Google Chrome，Firefox，Opera，IE9+，IOS，Android等多种热门环境。 利用lufylegend可以轻松的使用面向对象编程，并且可以配合Box2dWeb制作物理游戏， 另外它还内置了LTweenLite缓动类等非常实用的功能 。lufylegend配置起来非常简单，只需要引用相关js文件即可，并且在运行效率方面也比较高。
+
+[**技术实现** ](https://github.com/xuqiqiang/Contra)
+
+<p id = "build"></p>
+---
+
+## 预览
+
+本游戏在支持HTML5的浏览器中运行，使用键盘WASD键控制移动，K键：射击 L键：跳跃。
+
+<iframe frameborder="0" name="Iframe1" src="https://xuqiqiang.github.io/Contra/" width="900" height="700">
+您的浏览器不支持嵌入式框架，或者当前配置为不显示嵌入式框架。
+</iframe>
+
+
+## 后记
+
+回顾这个项目的开发，纯粹是出于个人兴趣。
+
+另外在很久很久以前，大概是我上大一的时候，我就做了一个c++的版本，基于Visual C++ 6.0，运行于Win32平台。
+[**c++项目源码** ](https://github.com/xuqiqiang/Contra-Win32)
+![c++版魂斗罗](/img/contra-win32.png)
+
+—— SnailStudio 后记于 2017.5

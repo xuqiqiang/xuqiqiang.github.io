@@ -1,0 +1,57 @@
+---
+layout:     post
+title:      "机甲塔防"
+subtitle:   "一款很有挑战性的塔防游戏"
+date:       2013-04-29 12:00:00
+author:     "SnailStudio"
+header-img: "img/post-bg-2015.jpg"
+tags:
+    - C++
+    - Android
+    - Cocos2dx
+---
+
+> “Yeah It's on. ”
+
+
+## 前言
+
+智能手机刚刚普及的时候很流行塔防游戏，作为一名手游爱好者，我也开发了一款自己的塔防游戏，由于图片素材都是从现有的游戏中抠出来的，画面有待完善，请不要见笑。
+
+[**截图预览** ](#build)
+
+![应用图标](/img/mechawar/icon.png)
+
+这是个人开发的一款很有挑战性的塔防游戏，游戏中效仿了流行的塔防游戏（如 《二战士兵荣耀》）的游戏特点，并融合了《红警2》的元素，比如“天启坦克”、“基洛夫飞艇”、“镭射幽浮”等等，并在传统的塔防游戏上添加了很多创意，比如采矿系统、敌人空军的轰炸等等。
+
+本游戏基于cocos2dx游戏开发引擎，完全兼容windows、Android、IOS三大平台。
+
+[**技术实现** ](https://github.com/xuqiqiang/MechaWar)
+
+<p id = "build"></p>
+
+---
+
+## 截图预览
+
+![截图预览](/img/mechawar/1.png)
+
+![截图预览](/img/mechawar/3.png)
+
+![截图预览](/img/mechawar/3.png)
+
+![截图预览](/img/mechawar/5.png)
+
+![截图预览](/img/mechawar/7.png)
+
+![截图预览](/img/mechawar/9.png)
+
+![截图预览](/img/mechawar/b.png)
+
+![截图预览](/img/mechawar/d.png)
+
+![截图预览](/img/mechawar/f.png)
+
+![截图预览](/img/mechawar/h.png)
+
+—— SnailStudio 后记于 2017.5
