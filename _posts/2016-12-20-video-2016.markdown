@@ -21,7 +21,9 @@ tags:
 
 本项目实现了基于ONVIF规范的IP摄像头发现、管理、播放、视频发布，基于MVP + Rxjava + Dagger2架构。可用于远程实时监控、网络直播等方面。
 
-[**技术实现**](https://github.com/xuqiqiang/mediadevice)
+项目源码：[https://github.com/xuqiqiang/mediadevice](https://github.com/xuqiqiang/mediadevice)
+
+---
 
 ## ONVIF简介
 
@@ -32,6 +34,8 @@ ONVIF标准将为网络视频设备之间的信息交换定义通用协议，包
 ONVIF规范描述了网络视频的模型、接口、数据类型以及数据交互的模式。并复用了一些现有的标准，如WS系列标准等。ONVIF规范的目标是实现一个网络视频框架协议，使不同厂商所生产的网络视频产品（包括摄录前端、录像设备等）完全互通。
 
 ONVIF规范中设备管理和控制部分所定义的接口均以Web Services的形式提供。ONVIF规范涵盖了完全的XML及WSDL的定义。每一个支持ONVIF规范的终端设备均须提供与功能相应的Web Service。服务端与客户端的数据交互采用**SOAP协议**。ONVIF中的其他部分比如音视频流则通过**RTP/RTSP**进行 。
+
+---
 
 ## SOAP协议介绍
 
@@ -58,6 +62,8 @@ SOAP消息基本结构：
 
 [通过SOAP协议获取rtsp视频流的流程](http://blog.csdn.net/xuqiqiang1993/article/details/66973746)
 
+---
+
 ## 流媒体协议介绍
 
 ![流媒体协议介绍](/img/video/p1.jpg)
@@ -79,6 +85,8 @@ RTSP的对话过程中SETUP可以确定RTP/RTCP使用的端口，PLAY/PAUSE/TEAR
 
 RTMP协议：被Flash用于对象、视频、音频的传输的协议(Real Time Messaging Protocol)。这个协议建立在TCP协议或者轮询HTTP协议之上. 
 RTMP协议就像一个用来装数据包的容器，这些数据既可以是AMF格式的数据，也可以是FLV中的视/音频数据。一个单一的连接可以通过不同的通道传输多路网络流。这些通道中的包都是按照固定大小的包传输的。
+
+---
 
 ## 基于ffmpeg的rtsp取流分析
 
@@ -205,6 +213,8 @@ a=control:track1</code></pre>
 <p>profile-level-id:<br>这个参数用于指示 H.264 流的 profile 类型和级别. 由 Base16(十六进制) 表示的 3 个字节. 第一个字节表示 H.264 的 Profile 类型, 第三个字节表示 H.264 的 Profile 级别。</p>
 </li>
 </ul>
+
+---
 
 ## 使用librtmp推送h264数据
 
@@ -365,8 +375,8 @@ rtmp = RTMP_Alloc();
 RTMP_Init(rtmp);
 
 /*设置URL*/
-if (RTMP_SetupURL(rtmp,rtmp_url) == FALSE) {
-    log(LOG_ERR,"RTMP_SetupURL() failed!");
+if (RTMP_SetupURL(rtmp, rtmp_url) == FALSE) {
+    log(LOG_ERR, "RTMP_SetupURL() error!");
     RTMP_Free(rtmp);
     return -1;
 }
@@ -376,14 +386,14 @@ RTMP_EnableWrite(rtmp);
 
 /*连接服务器*/
 if (RTMP_Connect(rtmp, NULL) == FALSE) {
-    log(LOG_ERR,"RTMP_Connect() failed!");
+    log(LOG_ERR, "RTMP_Connect() error!");
     RTMP_Free(rtmp);
     return -1;
 } 
 
 /*连接流*/
-if (RTMP_ConnectStream(rtmp,0) == FALSE) {
-    log(LOG_ERR,"RTMP_ConnectStream() failed!");
+if (RTMP_ConnectStream(rtmp, 0) == FALSE) {
+    log(LOG_ERR, "RTMP_ConnectStream() error!");
     RTMP_Close(rtmp);
     RTMP_Free(rtmp);
     return -1;
@@ -392,18 +402,18 @@ if (RTMP_ConnectStream(rtmp,0) == FALSE) {
 ```c
 /*定义包头长度,RTMP_MAX_HEADER_SIZE为rtmp.h中定义值为18*/
 
-#define RTMP_HEAD_SIZE   (sizeof(RTMPPacket)+RTMP_MAX_HEADER_SIZE)
+#define RTMP_HEAD_SIZE (sizeof(RTMPPacket) + RTMP_MAX_HEADER_SIZE)
 
 RTMPPacket * packet;
 unsigned char * body;
 
 /*分配包内存和初始化,len为包体长度*/
-packet = (RTMPPacket *)malloc(RTMP_HEAD_SIZE+len);
-memset(packet,0,RTMP_HEAD_SIZE);
+packet = (RTMPPacket *) malloc(RTMP_HEAD_SIZE+len);
+memset(packet, 0, RTMP_HEAD_SIZE);
 
 /*包体内存*/
-packet->m_body = (char *)packet + RTMP_HEAD_SIZE;
-body = (unsigned char *)packet->m_body;
+packet->m_body = (char *) packet + RTMP_HEAD_SIZE;
+body = (unsigned char *) packet->m_body;
 packet->m_nBodySize = len;
 
 /*
@@ -418,7 +428,7 @@ packet->m_nTimeStamp = timeoffset;
 
 /*发送*/
 if (RTMP_IsConnected(rtmp)) {
-    ret = RTMP_SendPacket(rtmp,packet,TRUE); /*TRUE为放进发送队列,FALSE是不放进发送队列,直接发送*/
+    ret = RTMP_SendPacket(rtmp, packet, TRUE); /*TRUE为放进发送队列,FALSE是不放进发送队列,直接发送*/
 }
 
 /*释放内存*/
@@ -440,11 +450,11 @@ int send_video_sps_pps()
     unsigned char * body;
     int i;
 
-    packet = (RTMPPacket *)malloc(RTMP_HEAD_SIZE+1024);
-    memset(packet,0,RTMP_HEAD_SIZE);
+    packet = (RTMPPacket *) malloc(RTMP_HEAD_SIZE+1024);
+    memset(packet, 0, RTMP_HEAD_SIZE);
 
-    packet->m_body = (char *)packet + RTMP_HEAD_SIZE;
-    body = (unsigned char *)packet->m_body;
+    packet->m_body = (char *) packet + RTMP_HEAD_SIZE;
+    body = (unsigned char *) packet->m_body;
 
     memcpy(winsys->pps,buf,len);
     winsys->pps_len = len;
@@ -465,18 +475,18 @@ int send_video_sps_pps()
     body[i++] = 0xff;
 
     /*sps*/
-    body[i++]   = 0xe1;
+    body[i++] = 0xe1;
     body[i++] = (sps_len >> 8) & 0xff;
     body[i++] = sps_len & 0xff;
-    memcpy(&body[i],sps,sps_len);
-    i +=  sps_len;
+    memcpy(&body[i], sps, sps_len);
+    i += sps_len;
 
     /*pps*/
-    body[i++]   = 0x01;
+    body[i++] = 0x01;
     body[i++] = (pps_len >> 8) & 0xff;
     body[i++] = (pps_len) & 0xff;
-    memcpy(&body[i],pps,pps_len);
-    i +=  pps_len;
+    memcpy(&body[i], pps, pps_len);
+    i += pps_len;
 
     packet->m_packetType = RTMP_PACKET_TYPE_VIDEO;
     packet->m_nBodySize = i;
@@ -487,7 +497,7 @@ int send_video_sps_pps()
     packet->m_nInfoField2 = rtmp->m_stream_id;
 
     /*调用发送接口*/
-    RTMP_SendPacket(rtmp,packet,TRUE);
+    RTMP_SendPacket(rtmp, packet, TRUE);
     free(packet);    
 
     return 0;
@@ -500,24 +510,30 @@ sps 与 pps 怎么获取到呢？
 
 我们在编码时会调用如下接口
 ```c
-size = x264_encoder_encode(cx->hd,&nal,&n,pic,&pout);
+size = x264_encoder_encode(cx->hd, &nal, &n, pic, &pout);
 
-int i,last;
-for (i = 0,last = 0;i < n;i++) {
-    if (nal[i].i_type == NAL_SPS) {
-        sps_len = nal[i].i_payload-4;
-        memcpy(sps,nal[i].p_payload+4,sps_len);
-    } else if (nal[i].i_type == NAL_PPS) {
-        pps_len = nal[i].i_payload-4;
-        memcpy(pps,nal[i].p_payload+4,pps_len);
+int i, last;
+for (i = 0, last = 0; i < n; i++)
+{
+    if (nal[i].i_type == NAL_SPS)
+    {
+        sps_len = nal[i].i_payload - 4;
+        memcpy(sps, nal[i].p_payload + 4, sps_len);
+    }
+    else if (nal[i].i_type == NAL_PPS)
+    {
+        pps_len = nal[i].i_payload - 4;
+        memcpy(pps, nal[i].p_payload + 4, pps_len);
 
         /*发送sps pps*/
-        send_video_sps_pps();    
+        send_video_sps_pps();
 
-    } else {
+    }
+    else
+    {
 
         /*发送普通帧*/
-        send_rtmp_video(nal[i].p_payload,nal[i].i_payload);
+        send_rtmp_video(nal[i].p_payload, nal[i].i_payload);
     }
     last += nal[i].i_payload;
 }
@@ -546,10 +562,10 @@ int send_rtmp_video(unsigned char * buf,int len)
 {
     int type;
     long timeoffset;
-    RTMPPacket * packet;
-    unsigned char * body;
+    RTMPPacket *packet;
+    unsigned char *body;
 
-    timeoffset = GetTickCount() - start_time;  /*start_time为开始直播时的时间戳*/
+    timeoffset = GetTickCount() - start_time; /*start_time为开始直播时的时间戳*/
 
     /*去掉帧界定符*/
     if (buf[2] == 0x00) { /*00 00 00 01*/
@@ -559,26 +575,26 @@ int send_rtmp_video(unsigned char * buf,int len)
             buf += 3;
             len -= 3;
     }
-    type = buf[0]&0x1f;
+    type = buf[0] & 0x1f;
 
-    packet = (RTMPPacket *)base_malloc(RTMP_HEAD_SIZE+len+9);
-    memset(packet,0,RTMP_HEAD_SIZE);
+    packet = (RTMPPacket *) base_malloc(RTMP_HEAD_SIZE + len + 9);
+    memset(packet, 0, RTMP_HEAD_SIZE);
 
-    packet->m_body = (char *)packet + RTMP_HEAD_SIZE;
+    packet->m_body = (char *) packet + RTMP_HEAD_SIZE;
     packet->m_nBodySize = len + 9;
 
     /*send video packet*/
-    body = (unsigned char *)packet->m_body;
-    memset(body,0,len+9);
+    body = (unsigned char *) packet->m_body;
+    memset(body, 0, len + 9);
 
     /*关键帧*/
     body[0] = 0x27;
     if (type == NAL_SLICE_IDR) {
-            /*非关键帧*/
-            body[0] = 0x17;
+        /*非关键帧*/
+        body[0] = 0x17;
     }
 
-    body[1] = 0x01;   /*nal unit*/
+    body[1] = 0x01; /*nal unit*/
     body[2] = 0x00;
     body[3] = 0x00;
     body[4] = 0x00;
@@ -589,7 +605,7 @@ int send_rtmp_video(unsigned char * buf,int len)
     body[8] = (len ) & 0xff;
 
     /*copy data*/
-    memcpy(&body[9],buf,len);
+    memcpy(&body[9], buf, len);
 
     packet->m_hasAbsTimestamp = 0;
     packet->m_packetType = RTMP_PACKET_TYPE_VIDEO;
@@ -599,7 +615,7 @@ int send_rtmp_video(unsigned char * buf,int len)
     packet->m_nTimeStamp = timeoffset;
 
     /*调用发送接口*/
-    RTMP_SendPacket(rtmp,packet,TRUE);
+    RTMP_SendPacket(rtmp, packet, TRUE);
     free(packet);
 }
 ```
@@ -620,6 +636,8 @@ int send_rtmp_video(unsigned char * buf,int len)
 要注意的几件事：
 libRTMP 多线程发送很容易出现问题，可以改成队列发送。将填充好的 packet 通过消息或者其它方式发送给其它线程，发送线程统一发送即可。
 
+---
+
 ## 视频预览
 
 本项目的视频预览模块加入了[**ijkplayer**](https://github.com/xuqiqiang/mediadevice/tree/master/dependencies/ffplay)。
@@ -630,19 +648,26 @@ ijkplayer 是一个基于 ffplay 的轻量级 Android/iOS 视频播放器。实�
 
 另外，项目中解决了ijkplayer播放rtsp流结束的时候未发送teardown标志的问题，具体实现可以参考我的[这篇文章](http://blog.csdn.net/xuqiqiang1993/article/details/66973861)。
 
+---
+
 ## 项目架构
 
 本项目按照[**Android-CleanArchitecture**](https://github.com/android10/Android-CleanArchitecture)架构标准，基于MVP、Rxjava、Dagger2等框架，使得代码结构清晰。
 
 什么倾向于cleanArchitecture，那一定是有他的道理的。对比传统开发的MVC开发方式，你会得到以下好处：
 
-> 代码复用性更高<br/>
-更易于测试<br/>
-耦合度更小
+* 代码复用性更高
+
+* 更易于测试
+
+* 耦合度更小
 
 由于篇幅过长，本文不再详细说明。关于探讨CleanArchitecture架构方面的文章很多，但是究其源头无非都是出自uncle-bob 叔叔的这篇[《The Clean Architecture》](#documents)。
 
+---
+
 ## 参考文档
+
 <p id = "documents"></p>
 [《RFC3550》](https://tools.ietf.org/html/rfc3550)<br/>
 [《RFC3551》](https://tools.ietf.org/html/rfc3551)<br/>
@@ -652,9 +677,11 @@ ijkplayer 是一个基于 ffplay 的轻量级 Android/iOS 视频播放器。实�
 [《RTMPDump Real-Time Messaging Protocol API》](http://rtmpdump.mplayerhq.hu/librtmp.3.html)<br/>
 [《The Clean Architecture》](https://8thlight.com/blog/uncle-bob/2012/08/13/the-clean-architecture.html)
 
+---
+
 ## 项目源码
 
-[**技术实现**](https://github.com/xuqiqiang/mediadevice)
+[https://github.com/xuqiqiang/mediadevice](https://github.com/xuqiqiang/mediadevice)
 
 <p id = "build"></p>
 

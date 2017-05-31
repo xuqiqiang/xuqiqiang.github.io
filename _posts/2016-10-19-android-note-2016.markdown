@@ -189,7 +189,7 @@ tags:
         @Override
         public boolean onInterceptTouchEvent(MotionEvent ev) {
             try {
-                returnsuper.onInterceptTouchEvent(ev);
+                return super.onInterceptTouchEvent(ev);
             } catch (IllegalArgumentException e) {
                 LogUtil.e(e);
             } catch (ArrayIndexOutOfBoundsException e) {
