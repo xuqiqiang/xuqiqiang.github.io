@@ -17,9 +17,847 @@ tags:
 
 [**截图预览** ](#build)
 
-本项目是基于XMPP远程通信协议的即时通信客户端解决方案，底层通信模块基于Libstrophe，由C++编写，可在Linux系统运行，利用NDK交叉编译，移植到Android、Ios等平台。可实现注册、登录、聊天、设置头像、发送图片、好友管理以及五子棋对战游戏等功能。
+本项目是基于XMPP远程通信协议的即时通信客户端解决方案，底层通信模块基于Libstrophe，由C++编写，可在Linux系统运行，利用NDK交叉编译，移植到Android、IOS等平台。可实现注册、登录、聊天、设置头像、发送图片、好友管理以及五子棋对战游戏等功能。
 
-[**技术实现** ](https://github.com/xuqiqiang/xmpp)
+---
+
+## 项目源码
+
+[https://github.com/xuqiqiang/xmpp](https://github.com/xuqiqiang/xmpp)
+
+---
+
+## XMPP协议
+
+(参考文档 [RFC6121](#documents)/[RFC3920](#documents))
+
+XMPP协议（Extensible Messaging and PresenceProtocol，可扩展消息处理现场协议）是一种基于XML的协议，目的是为了解决及时通信标准而提出来的，最早是在Jabber上实现的。
+
+它继承了在XML环境中灵活的发展性。因此，基于XMPP的应用具有超强的可扩展性。并且XML很易穿过防火墙，所以用XMPP构建的应用不易受到防火墙的阻碍。利用XMPP作为通用的传输机制，不同组织内的不同应用都可以进行有效的通信。
+
+#### XMPP协议特点
+
+* 所有XMPP信息都是以XML为基础的，扩展性强；
+* XMPP协议是公开的，程序开放源代码；
+* 状态(Presence)在整个持久连接中。通过持久连接的有效维持，XMPP协议一直有在网络中维持存在和可用信息的能力；
+* XMPP对所有连接上的客户端和服务器端允许建立并行的TCP套接字连接；
+* XMPP系统是模块化的，具有较高的安全性和可扩展性；
+
+#### XMPP协议分析
+
+XMPP中定义了三个角色：客户端，服务器，网关。通信能够在这三者的任意两个之间双向发生。
+
+* **服务器**
+
+    服务器同时承担了客户端的连接管理和信息的记录和转发功能。
+
+* **客户端**
+
+    大多数客户端是通过TCP直接连接，并且使用XMPP获得服务器提供全部功能和其他服务。
+
+* **网关**
+
+    网关承担着与异构即时通信系统的互联互通，异构系统可以包括SMS
+（短信），MSN，ICQ等。它的主要功能是将XMPP协议转换成外部消息(non-XMPP)系统使用的协议，也将返回的数据转换成XMPP。
+
+#### XMPP消息格式
+
+Jabber/XMPP系统使用XML流在不同实体之间相互传输数据。在两个实体的连接期间，XML流将从一个实体传送到另一个实体。在实体间，有三个顶层的XML元素：
+
+* **&lt;message/&gt; (消息元素)**
+
+    两个用户之间的实时交换消息。
+
+* **&lt;presence/&gt; (状态元素)**
+
+    用户的在线状态信息，可以是"available"、"unavailable"、"Hide"等。当用户是在线状态时，好友发给他的消息就立即被传递。
+
+* **&lt;iq/&gt; (请求/响应元素)**
+
+    IQ代表"Info/Query"，用来发送和获取实体之间的信息。IQ元素用于不同的目的，它们之间通过不同的命名空间来区分。最常用的命名空间是："jabber:iq:register","jabber:iq:auth","jabber:iq:roster"。例如客户端像服务器发送iq消息来注册用户、登录、获取联系人列表。
+
+一个基本的message消息：
+
+```xml
+<message id="zDMDIlG" xmlns="jabber:client" to="xuqiqiang2@tt.com" type="chat" from="xuqiqiang1@tt.com">
+	<body>hello</body>
+	<thread>CC8rG0</thread>
+</message>
+```
+
+---
+
+## Libstrophe
+
+(参考文档 [Intro to Libstrophe](#documents))
+
+libstrophe是一个XMPP协议的客户端和组件通信的C库。其目标是建立一个可移植的，可用快捷的，可靠的，文档齐全的，并能完全实现XMPP规范的开发工具库。可用于实时游戏、通知系统、以及传统的即时消息。
+
+主要有两个部分组成：
+
+* 对基于XMPP信息体的解析与组装 
+* 实现基于XMPP协议与XMPP SERVER或者其他XMPP实体间的通讯
+
+#### 发送数据流
+
+```xml
+<iq from="google.com" type="set" id="1">
+    <pubsub xmlns="http://jabber.org/protocol/pubsub">
+        <publish node="http://xmppgoogle.org/google_event">
+            <item>
+                <status xmlns="http://xmppgoogle.org/google/commands/objects/status" object_type="dev" event="added" from="google.com">
+                <object object_type="dev" object_id="devid" owner_id="owner_id">
+                </status>
+            </item>
+        </publish>
+    </pubsub>
+</iq>
+```
+
+基于`C语言`的数据流发送：
+
+```c
+void send_iq(xmpp_conn_t *const conn)
+{
+
+    xmpp_stanza_t *iq, *pubsub, *publish, *item, *status, *object;
+
+    iq = xmpp_stanza_new(ctx);
+
+    xmpp_stanza_set_name(iq, "iq");
+
+    xmpp_stanza_set_attribute(iq, "from", "google.com");
+
+    xmpp_stanza_set_type(iq, "set");
+
+    xmpp_stanza_set_id(iq, "1");
+
+    pubsub = xmpp_stanza_new(ctx);
+
+    xmpp_stanza_set_name(pubsub, "pubsub");
+
+    xmpp_stanza_set_ns(pubsub, "http://jabber.org/protocol/pubsub");
+
+    xmpp_stanza_add_child(iq, pubsub);
+
+    item= xmpp_stanza_new(ctx);
+
+    xmpp_stanza_set_name(item, "item");
+
+    xmpp_stanza_add_child( publish, item );
+
+    status = xmpp_stanza_new(ctx);
+
+    xmpp_stanza_set_name(status, "status");
+
+    xmpp_stanza_set_ns(status, "http://xmppgoogle.org/google/commands/objects/status");
+
+    xmpp_stanza_set_attribute(status, "object_type", "dev");
+    xmpp_stanza_set_attribute(status, "event", "added");
+    xmpp_stanza_set_attribute(status, "from", "google.com");
+    xmpp_stanza_add_child(item, status);
+
+    object= xmpp_stanza_new(ctx);
+
+    xmpp_stanza_set_name(object, "object");
+
+    xmpp_stanza_set_attribute(object, "object_type", "dev");
+
+    xmpp_stanza_set_attribute(object, "object_id", "devid");
+    xmpp_stanza_set_attribute(object, "owner_id", "owner_id");
+
+    xmpp_stanza_add_child(status, object);
+
+    xmpp_stanza_release(object);
+
+    xmpp_stanza_release(status);
+    xmpp_stanza_release(item);
+
+    xmpp_stanza_release(publish);
+    xmpp_stanza_release(pubsub);
+
+    xmpp_stanza_send(conn, iq);
+
+    xmpp_stanza_release(iq);
+
+}
+```
+
+---
+
+## 交叉编译Libstrophe
+
+Libstrophe内部调用了[Expat XML Parser](https://libexpat.github.io/)库，首先需要去获取它。
+
+Expat是一个用C语言开发的、用来解析XML文档的开发库，它最初是开源的、Mozilla项目下的一个XML解析器。
+
+#### Android平台
+
+配置和编译Expat：
+
+```xml
+export NDK="/home/android_ndk/android-ndk-r8d"
+
+./configure \
+--host=arm \
+CC="$NDK/toolchains/arm-linux-androideabi-4.4.3/prebuilt/linux-x86/bin/arm-linux-androideabi-gcc --sysroot=$NDK/platforms/android-8/arch-arm" \
+--prefix=/home/xmpp/libs/android/expat-2.0.0/install
+
+make
+
+make install
+```
+
+配置Libstrophe：
+
+```xml
+export NDK="/home/android_ndk/android-ndk-r8d"
+
+./configure \
+--host=arm \
+CC="$NDK/toolchains/arm-linux-androideabi-4.4.3/prebuilt/linux-x86/bin/arm-linux-androideabi-gcc --sysroot=$NDK/platforms/android-8/arch-arm" \
+--prefix=/home/xmpp/libs/android/libstrophe-master/install \
+CFLAGS=" -I/home/xmpp/libs/android/expat-2.0.0/install/include/ -I ./"
+```
+
+
+修改Makefile：
+
+```xml
+LDFLAGS = -L/home/xmpp/libs/android/expat-2.0.0/install/lib/
+CFLAGS = -g -Wall -I/home/xmpp/libs/android/expat-2.0.0/install/include/
+SSL_LIBS = #-lpthread
+```
+
+编译Libstrophe：
+
+```
+make
+
+make install
+```
+
+#### IOS平台
+
+IOS平台需要分别针对虚拟机和iPhone真机进行交叉编译。
+
+**simulator**
+
+配置和编译Expat：
+
+```xml
+./configure \
+--host=i686-apple-darwin11 \
+CC="/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/bin/gcc -arch i386" \
+CFLAGS="-isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator6.0.sdk" \
+--prefix=/Users/xuqiqiang/Documents/xmpp/libs/simulator/expat-2.0.0/install
+```
+
+配置Libstrophe：
+
+```xml
+./configure \
+BSD-generic32 \
+CC="/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/bin/gcc -arch i386" \
+RANLIB=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/bin/ranlib \
+--prefix=/Users/xuqiqiang/Documents/xmpp/libs/simulator/libstrophe-master/install \
+CFLAGS="-isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator6.0.sdk \
+-I/Users/xuqiqiang/Documents/xmpp/libs/simulator/expat-2.0.0/install/include/ -I./"
+```
+
+修改Makefile：
+
+```xml
+LDFLAGS = -L/Users/xuqiqiang/Documents/xmpp/libs/simulator/expat-2.0.0/install/lib/
+CFLAGS = -g -Wall -I/Users/xuqiqiang/Documents/xmpp/libs/simulator/expat-2.0.0/install/include/ -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator6.0.sdk
+SSL_LIBS = -lpthread # -lz 
+```
+
+**iPhone**
+
+配置和编译Expat：
+
+```xml
+./configure \
+--host=arm-apple-darwin \
+CC="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc" \
+CFLAGS="-arch armv7 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS8.1.sdk" \
+--prefix=/Users/xuqiqiang/Documents/xmpp/libs/iphone/expat-2.0.0/install
+```
+
+配置Libstrophe：
+
+```xml
+./configure \
+--host=arm-apple-darwin \
+CC="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc" \
+RANLIB=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ranlib \
+--prefix=/Users/xuqiqiang/Documents/xmpp/libs/iphone/libstrophe-master/install \
+CFLAGS="-arch armv7 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS8.1.sdk \
+-I ../expat-2.0.0/install/include/ -I./"
+```
+
+修改Makefile：
+
+```xml
+LDFLAGS = -arch armv7 -arch arm64 -L ../expat-2.0.0/install/lib/
+CFLAGS = -g -Wall -arch armv7 -arch arm64 -I ../expat-2.0.0/install/include/ -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS8.1.sdk
+SSL_LIBS = -lpthread # -lz 
+```
+
+> ps:真机版在 mac os 10.9.5 、Xcode 6.1下编译通过；
+虚拟机版在 mac os 10.8 、Xcode 4.5下编译通过；
+
+---
+
+## 封装Libstrophe
+
+#### 用户接口：
+
+```c
+int (*connect_xmpp)(char* strServXmpp, char* strUserName, char* strPassWord);
+
+int (*set_status)(const char* status);
+
+int (*send_chat_message)(char* friend_id, char* body);
+
+int (*get_friends_list)();
+
+int (*send_on_delete_friends)(const char* gDelFriend_id);
+
+int (*send_heartbeat)();
+
+int (*add_friends)(const char* new_friends);
+
+int (*declare_online)();
+
+int (*stop_xmpp)();
+```
+
+![用户接口](/img/xmpp/p1.jpg)
+
+#### connect_xmpp
+
+* 记录客户端、服务器的信息;
+* 创建子线程server_thread;
+
+```c
+/*define a handler for connection events*/
+void conn_handler(xmpp_conn_t* const conn, const xmpp_conn_event_t status,
+	const int error, xmpp_stream_error_t* const stream_error,
+	void* const userdata) {
+
+	if (status == XMPP_CONN_CONNECT) {
+
+		LOGD("DEBUG:connected\n");
+
+		xmpp_handler_add(conn, on_receive_message_handler, NULL, "message", NULL, NULL);
+
+		xmpp_handler_add(conn, on_receive_iq_handler, NULL, "iq", NULL, NULL);
+
+		xmpp_handler_add(conn, on_receive_presence_handler, NULL, "presence", NULL, NULL);
+
+		xmpp_declare_online(conn);
+
+		xmpp_get_vCard();
+
+		get_friends_list();
+
+	}
+	else {
+		LOGD("DEBUG:disconnect\n");
+
+        if (error != 0)
+	        LOGD("error:%d\n", error);
+	    if (stream_error != NULL)
+	        LOGD("stream_error:%s\n", stream_error->text);
+    
+		xmpp_handler_delete(conn, on_receive_message_handler);
+		xmpp_handler_delete(conn, on_receive_iq_handler);
+		xmpp_handler_delete(conn, on_receive_presence_handler);
+
+		xmpp_ctx_t *ctx = xmpp_conn_get_context(conn);
+		xmpp_stop(ctx);
+
+		if (error == ENETUNREACH){
+			start_xmpp = 0;
+			LOGD("网络断开!\n");
+
+			if (sendBroadcast != NULL)
+				sendBroadcast(ON_NETWORK_DISCONNECT_ID, "");
+		}
+
+		if (error == ENXIO){
+			start_xmpp = 0;
+			LOGD("用户或密码不正确!\n");
+
+			if (sendBroadcast != NULL)
+				sendBroadcast(ON_AUTH_ERROR_ID, "");
+		}
+
+		//110
+		if (error == ESHUTDOWN){
+			start_xmpp = 0;
+			LOGD("Can't send after socket shutdown!\n");
+
+			if (sendBroadcast != NULL)
+				sendBroadcast(ON_NETWORK_DISCONNECT_ID, "");
+		}
+
+		if (error == ETIMEDOUT){
+			start_xmpp = 0;
+			LOGD("Can't send after socket shutdown!\n");
+
+			if (sendBroadcast != NULL)
+				sendBroadcast(ON_NETWORK_DISCONNECT_ID, "");
+		}
+	}
+}
+
+void* server_thread(void* param){
+
+	while (start_xmpp) {
+		xmpp_ctx_t *ctx;
+		xmpp_conn_t *conn;
+		xmpp_log_t *log;
+
+		/*initalize library*/
+		xmpp_initialize();
+
+		/*create a context*/
+		log = xmpp_get_default_logger(XMPP_LEVEL_DEBUG);
+		ctx = xmpp_ctx_new(NULL, log);
+
+		/* create a connection*/
+		conn = xmpp_conn_new(ctx);
+
+		LOGD("gUserName:%s", user_jid);
+		LOGD("user_password:%s", user_password);
+		/* setup authentication information*/
+		xmpp_conn_set_jid(conn, user_jid);
+		xmpp_conn_set_pass(conn, user_password);
+
+		LOGD("xmpp_connect_client\n");
+		/* initialize connection*/
+		char *strServerIP;
+		if (strlen(server_IP) == 0){
+			LOGD("strServXmpp:NULL\n");
+			strServerIP = NULL;
+		}
+		else
+			strServerIP = server_IP;
+		xmpp_connect_client(conn, strServerIP, server_altport, conn_handler, NULL);
+
+		/* enter the event loop - our connect handler will trigger an exit*/
+		xmpp_run(ctx);
+
+		/*release our connection and contex*/
+		xmpp_conn_release(conn);
+		xmpp_ctx_free(ctx);
+
+		//xmpp_log_free(log);
+
+		/*final shutdown of the libraty*/
+		xmpp_shutdown();
+
+		//Connection reset by peer
+		if (get_conn_error(conn) == ECONNRESET){
+			LOGD("Connection reset by peer\n");
+			sleep(8);
+		}
+		else
+			sleep(1);
+	}
+
+	return (void*)0;
+}
+```
+
+![子线程server_thread](/img/xmpp/p3.png)
+
+#### 用户模型
+
+![子线程thread1](/img/xmpp/p5.png)
+
+用户输入：
+
+![用户输入](/img/xmpp/p7.png)
+
+监听服务器：
+
+![监听服务器](/img/xmpp/p9.png)
+
+## 项目中遇到的问题
+
+#### Libstrophe没有用户注册模块(版本号:0.8-snapshot，最后修改时间:2014/11/21 10:50:40)
+
+解决方案：在连接初始化后发送注册iq消息：
+
+```xml
+<iq id="RbEdY-1" type="set">
+    <query xmlns="jabber:iq:register">
+        <username>%s</username>
+        <email></email>
+        <password>%s</password>
+    </query>
+</iq>
+```
+
+patch:
+
+```c
+diff --git a/src/auth.c b/src/auth.c
+index 2371925..85d0030 100644
+--- a/src/auth.c
++++ b/src/auth.c
+@@ -658,7 +658,13 @@ static void _auth(xmpp_conn_t * const conn)
+ 	    xmpp_stanza_release(iq);
+ 	    xmpp_error(conn->ctx, "auth", 
+ 		       "Cannot authenticate without resource");
+-	    xmpp_disconnect(conn);
++        /* Add register module by xuqiqiang 2014/12/5 */
++        if(!conn->isRegister){
++            conn->error = ENXIO;
++            conn_disconnect(conn);
++        }
++        else
++            xmpp_register_user(conn);
+ 	    return;
+ 	}
+ 	xmpp_stanza_add_child(child, authdata);
+@@ -887,8 +893,14 @@ static int _handle_bind(xmpp_conn_t * const conn,
+ 	    conn->authenticated = 1;
+ 	   
+ 	    /* call connection handler */
+-	    conn->conn_handler(conn, XMPP_CONN_CONNECT, 0, NULL, 
+-			       conn->userdata);
++        /* Add register module by xuqiqiang 2014/12/5 */
++        if(!conn->isRegister)
++            conn->conn_handler(conn, XMPP_CONN_CONNECT, 0, NULL,
++                conn->userdata);
++        else{
++            conn->register_result = XMPP_REGISTER_ALREADY_EXIST;
++            xmpp_disconnect(conn);
++        }
+ 	}
+     } else {
+ 	xmpp_error(conn->ctx, "xmpp", "Server sent malformed bind reply.");
+@@ -926,7 +938,13 @@ static int _handle_session(xmpp_conn_t * const conn,
+ 	conn->authenticated = 1;
+ 	
+ 	/* call connection handler */
+-	conn->conn_handler(conn, XMPP_CONN_CONNECT, 0, NULL, conn->userdata);
++        /* Add register module by xuqiqiang 2014/12/5 */
++        if(!conn->isRegister)
++            conn->conn_handler(conn, XMPP_CONN_CONNECT, 0, NULL, conn->userdata);
++        else{
++            conn->register_result = XMPP_REGISTER_ALREADY_EXIST;
++            xmpp_disconnect(conn);
++        }
+     } else {
+ 	xmpp_error(conn->ctx, "xmpp", "Server sent malformed session reply.");
+ 	xmpp_disconnect(conn);
+@@ -968,7 +986,13 @@ static int _handle_legacy(xmpp_conn_t * const conn,
+ 	xmpp_debug(conn->ctx, "xmpp", "Legacy auth succeeded.");
+ 
+ 	conn->authenticated = 1;
+-	conn->conn_handler(conn, XMPP_CONN_CONNECT, 0, NULL, conn->userdata);
++        /* Add register module by xuqiqiang 2014/12/5 */
++        if(!conn->isRegister)
++            conn->conn_handler(conn, XMPP_CONN_CONNECT, 0, NULL, conn->userdata);
++        else{
++            conn->register_result = XMPP_REGISTER_ALREADY_EXIST;
++            xmpp_disconnect(conn);
++        }
+     } else {
+ 	xmpp_error(conn->ctx, "xmpp", "Server sent us a legacy authentication "\
+ 		   "response with a bad type.");
+diff --git a/src/common.h b/src/common.h
+index 9434e6f..254b7e0 100644
+--- a/src/common.h
++++ b/src/common.h
+@@ -203,7 +203,11 @@ struct _xmpp_conn_t {
+ 
+     /* user handlers only get called after authentication */
+     int authenticated;
+-    
++
++    int isRegister;
++
++    int register_result;
++
+     /* connection events handler */
+     xmpp_conn_handler conn_handler;
+     void *userdata;
+diff --git a/src/conn.c b/src/conn.c
+index 26df418..8de45b4 100644
+--- a/src/conn.c
++++ b/src/conn.c
+@@ -28,6 +28,7 @@
+ #include "common.h"
+ #include "util.h"
+ #include "parser.h"
++#include <pthread.h>
+ 
+ #ifndef DEFAULT_SEND_QUEUE_MAX
+ /** @def DEFAULT_SEND_QUEUE_MAX
+@@ -136,6 +137,9 @@ xmpp_conn_t *xmpp_conn_new(xmpp_ctx_t * const ctx)
+ 	/* give the caller a reference to connection */
+ 	conn->ref = 1;
+ 
++    conn->isRegister = 0;
++    conn->register_result = XMPP_REGISTER_NETWORK_CUT_DOWN;
++
+ 	/* add connection to ctx->connlist */
+ 	tail = conn->ctx->connlist;
+ 	while (tail && tail->next) tail = tail->next;
+@@ -159,6 +163,148 @@ xmpp_conn_t *xmpp_conn_new(xmpp_ctx_t * const ctx)
+     return conn;
+ }
+ 
++/* Add register module by xuqiqiang 2014/12/5 */
++void xmpp_set_register(xmpp_conn_t * const conn){
++    conn->isRegister = 1;
++}
++
++int on_register_user_handler(xmpp_conn_t * const conn,
++    xmpp_stanza_t * const stanza,
++    void * const userdata){
++
++    char *type = xmpp_stanza_get_attribute(stanza, "type");
++
++    if (type != NULL && strcmp(type, "result") == 0){
++        fprintf(stderr, "register successful!\n");
++        conn->register_result = XMPP_REGISTER_SUCCESSFUL;
++    }
++    else{
++        fprintf(stderr, "register not successful!\n");
++        conn->register_result = XMPP_REGISTER_NOT_SUCCESSFUL;
++    }
++
++    xmpp_disconnect(conn);
++
++    return 1;
++}
++
++void xmpp_register_user(xmpp_conn_t * const conn){
++
++    handler_add(conn, on_register_user_handler,
++            NULL, "iq", NULL, NULL);
++
++    char name[100];
++
++    int i;
++
++    for (i = 0; conn->jid[i] != '\0'; i++){
++        if (conn->jid[i] == '@')
++            break;
++    }
++
++    strncpy(name, conn->jid, i);
++    name[i] = '\0';
++
++    xmpp_send_raw_string(conn, "<iq id=\"RbEdY-1\" type=\"set\"><query xmlns=\"jabber:iq:register\"><username>%s</username><email></email><password>%s</password></query></iq>",name,xmpp_conn_get_pass(conn));
++}
++
++/*define a handler for connection events*/
++void thread_xmpp_register_handler(xmpp_conn_t* const conn, const xmpp_conn_event_t status,
++    const int error, xmpp_stream_error_t* const stream_error,
++    void* const userdata) {
++    xmpp_ctx_t *ctx = xmpp_conn_get_context(conn);
++
++    if (status != XMPP_CONN_CONNECT) {
++
++        fprintf(stderr, "DEBUG:disconnect\n");
++
++        xmpp_stop(ctx);
++    }
++}
++
++void* thread_xmpp_register(void* param) {
++    xmpp_register_t *reg = (xmpp_register_t *)param;
++
++    xmpp_ctx_t *ctx;
++    xmpp_conn_t *conn;
++    xmpp_log_t *log;
++
++    /*initalize library*/
++    xmpp_initialize();
++
++    /*create a context*/
++    log = xmpp_get_default_logger(XMPP_LEVEL_DEBUG);
++    ctx = xmpp_ctx_new(NULL, log);
++
++    /* create a connection*/
++    conn = xmpp_conn_new(ctx);
++
++    /* setup authentication information*/
++    xmpp_conn_set_jid(conn, reg->jid);
++    xmpp_conn_set_pass(conn, reg->pass);
++
++    /* initialize connection*/
++    char *strServerIP;
++    if (reg->serverIP == NULL || strlen(reg->serverIP) == 0){
++        strServerIP = NULL;
++    }
++    else
++        strServerIP = reg->serverIP;
++
++    xmpp_set_register(conn);
++
++    xmpp_connect_client(conn, strServerIP, reg->serverAltport, thread_xmpp_register_handler, NULL);
++
++    /* enter the event loop - our connect handler will trigger an exit*/
++    xmpp_run(ctx);
++
++    if(reg->on_get_register_result != NULL)
++    reg->on_get_register_result(conn->register_result);
++
++    /*release our connection and contex*/
++    xmpp_conn_release(conn);
++    xmpp_ctx_free(ctx);
++
++    /*final shutdown of the libraty*/
++    xmpp_shutdown();
++
++    free(reg->jid);
++    free(reg->pass);
++    free(reg->serverIP);
++    free(reg);
++
++    return (void*)0;
++}
++
++void xmpp_register(const char *jid, const char *pass, const char *serverIP, int serverAltport, void * on_register){
++
++    xmpp_register_t *reg = (xmpp_register_t *)malloc(sizeof(xmpp_register_t));
++
++    reg->jid = (char *) malloc(sizeof(char) * (strlen(jid) + 1));
++    strcpy(reg->jid, jid);
++    reg->pass = (char *) malloc(sizeof(char) * (strlen(pass) + 1));
++    strcpy(reg->pass, pass);
++    reg->serverIP = (char *) malloc(sizeof(char) * (strlen(serverIP) + 1));
++    strcpy(reg->serverIP, serverIP);
++
++    reg->serverAltport = serverAltport;
++    reg->on_get_register_result = on_register;
++
++    pthread_t thread_xmpp_register_id;
++
++    pthread_attr_t thread_xmpp_register_attr; //线程属性
++    pthread_attr_init(&thread_xmpp_register_attr);  //初始化线程属性
++    pthread_attr_setdetachstate(&thread_xmpp_register_attr, PTHREAD_CREATE_DETACHED);      //设置线程属性
++
++    if (pthread_create(&thread_xmpp_register_id, &thread_xmpp_register_attr, (void *) thread_xmpp_register, reg) != 0){
++        fprintf(stderr, "Create thread_xmpp_register error!\n");
++    }
++}
++
++int get_conn_error(xmpp_conn_t * const conn){
++    return conn->error;
++}
++
+ /** Clone a Strophe connection object.
+  *  
+  *  @param conn a Strophe connection object
+@@ -474,8 +620,9 @@ void conn_disconnect(xmpp_conn_t * const conn)
+     sock_close(conn->sock);
+ 
+     /* fire off connection handler */
+-    conn->conn_handler(conn, XMPP_CONN_DISCONNECT, conn->error,
+-		       conn->stream_error, conn->userdata);
++    if(conn->conn_handler != NULL)
++        conn->conn_handler(conn, XMPP_CONN_DISCONNECT, conn->error,
++		           conn->stream_error, conn->userdata);
+ }
+ 
+ /* prepares a parser reset.  this is called from handlers. we can't
+diff --git a/src/event.c b/src/event.c
+index 1eaa643..a96d70b 100644
+--- a/src/event.c
++++ b/src/event.c
+@@ -254,6 +254,7 @@ void xmpp_run_once(xmpp_ctx_t *ctx, const unsigned long timeout)
+ 		if (sock_connect_error(conn->sock) != 0) {
+ 		    /* connection failed */
+ 		    xmpp_debug(ctx, "xmpp", "connection failed");
++            conn->error = ENETUNREACH;
+ 		    conn_disconnect(conn);
+ 		    break;
+ 		}
+diff --git a/strophe.h b/strophe.h
+index e3a2f4d..57286f7 100644
+--- a/strophe.h
++++ b/strophe.h
+@@ -367,6 +367,30 @@ void xmpp_run_once(xmpp_ctx_t *ctx, const unsigned long  timeout);
+ void xmpp_run(xmpp_ctx_t *ctx);
+ void xmpp_stop(xmpp_ctx_t *ctx);
+ 
++/* Add register module by xuqiqiang 2014/12/5 */
++typedef struct {
++    char *jid;
++    char *pass;
++    char *serverIP;
++    int serverAltport;
++    void (*on_get_register_result)(int result);
++} xmpp_register_t;
++
++void xmpp_register(const char *jid, const char *pass, const char *serverIP, int serverAltport, void * on_register);
++
++void xmpp_set_register(xmpp_conn_t * const conn);
++
++void xmpp_register_user(xmpp_conn_t * const conn);
++
++typedef enum {
++    XMPP_REGISTER_SUCCESSFUL,
++    XMPP_REGISTER_NOT_SUCCESSFUL,
++    XMPP_REGISTER_ALREADY_EXIST,
++    XMPP_REGISTER_NETWORK_CUT_DOWN
++} xmpp_register_result;
++
++int get_conn_error(xmpp_conn_t * const conn);
++
+ #ifdef __cplusplus
+ }
+ #endif
+```
+
+#### Libstrophe内部存在内存泄露(版本号:0.8-snapshot，最后修改时间:2014/11/21 10:50:40)
+
+解决方案：及时释放空间。
+
+patch:
+
+```c
+diff --git a/src/auth.c b/src/auth.c
+index 2371925..8bf26c6 100644
+--- a/src/auth.c
++++ b/src/auth.c
+@@ -550,6 +550,7 @@ static void _auth(xmpp_conn_t * const conn)
+ 	    return;
+ 	}
+ 	str = sasl_plain(conn->ctx, authid, conn->pass);
++    free(authid); // Fix memory leak by xuqiqiang 2014/12/9
+ 	if (!str) {
+ 	    disconnect_mem_error(conn);
+ 	    return;
+```
+
+#### 在网络非常不好的情况下偶尔会出现Unrecoverable TLS error错误导致xmpp断开；
+
+解决方案：设置标志start_xmpp循环执行对xmpp的连接进行维护，只有用户调用stop_xmpp才能断开；
+
+![子线程server_thread](/img/xmpp/p3.png)
+
+
+---
+
+## 参考文档
+
+<p id = "documents"></p>
+[《RFC 6121 - XMPP即时消息和出席信息》](http://wiki.jabbercn.org/RFC6121)<br/>
+[《RFC 3920 - XMPP核心协议》](http://wiki.jabbercn.org/RFC6121)<br/>
+[《RFC 2779 - Instant Messaging / Presence Protocol Requirements》](https://tools.ietf.org/html/rfc2779)<br/>
+[《Intro to Libstrophe》](http://strophe.im/libstrophe/)
 
 <p id = "build"></p>
 
