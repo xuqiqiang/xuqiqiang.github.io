@@ -2,7 +2,7 @@
 layout:     post
 title:      "五年Android开发，让我“刻骨铭心”的那些坑"
 subtitle:   "本人对在开发过程中踩坑经历的一次总结"
-date:       2015-12-29 12:00:00
+date:       2016-10-19 12:00:00
 author:     "SnailStudio"
 header-img: "img/post-bg-2015.jpg"
 tags:
