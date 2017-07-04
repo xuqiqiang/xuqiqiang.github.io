@@ -654,7 +654,7 @@ ijkplayer 是一个基于 ffplay 的轻量级 Android/iOS 视频播放器。实�
 
 本项目按照[**Android-CleanArchitecture**](https://github.com/android10/Android-CleanArchitecture)架构标准，基于MVP、Rxjava、Dagger2等框架，使得代码结构清晰。
 
-什么倾向于cleanArchitecture，那一定是有他的道理的。对比传统开发的MVC开发方式，你会得到以下好处：
+为什么倾向于cleanArchitecture，那一定是有他的道理的。对比传统开发的MVC开发方式，你会得到以下好处：
 
 * 代码复用性更高
 
