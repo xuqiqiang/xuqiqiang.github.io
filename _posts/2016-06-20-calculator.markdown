@@ -2,7 +2,7 @@
 layout:     post
 title:      "智能计算器"
 subtitle:   "一款实用性超强的科学计算器"
-date:       2016-12-20 12:00:00
+date:       2016-06-20 12:00:00
 author:     "SnailStudio"
 header-img: "img/post-bg-2015.jpg"
 tags:
@@ -282,7 +282,7 @@ fun main(args: Array<String>) {
 ## 参考文档
 
 <p id = "documents"></p>
-[《RFC3550》](https://tools.ietf.org/html/rfc3550)<br/>
+[《Kotlin Programming Language》](http://kotlinlang.org/)<br/>
 [《The Clean Architecture》](https://8thlight.com/blog/uncle-bob/2012/08/13/the-clean-architecture.html)
 
 —— SnailStudio 后记于 2017.5
