@@ -14,7 +14,7 @@ tags:
 
 ## 前言
 
-这篇文章是本人对在开发过程中踩坑经历的一次总结；分为系统API的坑、使用不当导致的坑、开源项目中的坑等几个方面，知识面有限，认知难免会有偏颇，如发现有问题还请指正。
+这篇文章是本人对在开发过程中踩坑经历的一次总结；分为系统API的坑、使用不当导致的坑、编译时的坑、开源项目中的坑等几个方面，知识面有限，认知难免会有偏颇，如发现有问题还请指正。
 
 <p id = "build_1"></p>
 
@@ -152,6 +152,129 @@ tags:
 
 解决方案：不同Fragment之间切换时，主动调用各个Fragment的生命周期回调；
 
+**Fragment的onActivityResult无效**
+
+问题现象：常见的，我们会在FragmentActivity中嵌套一层Fragment使用，甚至Fragment下层层嵌套使用。这个时候如果使用了activity.startActivityForResult()，在第二级或者更深级别的Fragment将无法收到onActivityResult回调。
+
+原因分析：查看FragementActivity的源码发现：
+
+```java
+    public void startActivityFromFragment(Fragment fragment, Intent intent,
+           int requestCode) {
+        if (requestCode == -1) {
+           super.startActivityForResult(intent, -1);
+           return;
+        }
+        if ((requestCode & 0xffff0000) != 0) {
+           throw new IllegalArgumentException("Can only use lower 16 bits for requestCode");
+        }
+        super.startActivityForResult(intent, ((fragment.mIndex + 1) << 16) + (requestCode & 0xffff));
+    }
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        mFragments.noteStateNotSaved();
+        int index = requestCode >> 16;
+        if (index != 0) {
+           index--;
+           if (mFragments.mActive == null || index < 0 || index >= mFragments.mActive.size()) {
+              Log.w(TAG, "Activity result fragment index out of range: 0x"
+                    + Integer.toHexString(requestCode));
+              return;
+           }
+           Fragment frag = mFragments.mActive.get(index);
+           if (frag == null) {
+              Log.w(TAG, "Activity result no fragment exists for index: 0x"
+                    + Integer.toHexString(requestCode));
+           } else {
+              frag.onActivityResult(requestCode & 0xffff, resultCode, data);
+           }
+           return;
+        }
+        super.onActivityResult(requestCode, resultCode, data);
+    }
+```
+
+原来，程序猿偷懒，没有处理嵌套Fragment的情况，也就是说回调只到第一级Fragment，就没有继续分发。
+
+解决方案：调用fragment.startActivityForResult()启动可以在fragment中的onActivityResult()接受处理。
+
+如果想根治这个问题，我们可以实现一个自己的FragmentActiviy，来实现继续分发，如下：
+
+```java
+public class BaseFragmentActiviy extends FragmentActivity {
+    private static final String TAG = "BaseActivity";
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        FragmentManager fm = getSupportFragmentManager();
+        int index = requestCode >> 16;
+        if (index != 0) {
+            index--;
+            if (fm.getFragments() == null || index < 0
+                    || index >= fm.getFragments().size()) {
+                Log.w(TAG, "Activity result fragment index out of range: 0x"
+                      + Integer.toHexString(requestCode));
+                return;
+            }
+            Fragment frag = fm.getFragments().get(index);
+            if (frag == null) {
+                Log.w(TAG, "Activity result no fragment exists for index: 0x"
+                      + Integer.toHexString(requestCode));
+            } else {
+                handleResult(frag, requestCode, resultCode, data);
+            }
+            return;
+        }
+    }
+
+    /**
+     * 递归调用，对所有子Fragement生效
+     *
+     * @param frag
+     * @param requestCode
+     * @param resultCode
+     * @param data
+     */
+    private void handleResult(Fragment frag, int requestCode, int resultCode,
+                              Intent data) {
+        frag.onActivityResult(requestCode & 0xffff, resultCode, data);
+        List<Fragment> frags = frag.getChildFragmentManager().getFragments();
+        if (frags != null) {
+            for (Fragment f : frags) {
+                if (f != null)
+                    handleResult(f, requestCode, resultCode, data);
+            }
+        }
+    }
+}
+```
+
+然后我们继承这个BaseFragmentActivity即可，但是要注意，在Fragment中启动Activity时，一定要调用根Fragment的启动方法，如下：
+
+```java
+    /**
+      * 得到根Fragment
+      *
+      * @return
+      */
+    private Fragment getRootFragment() {
+        Fragment fragment = getParentFragment();
+        while (fragment.getParentFragment() != null) {
+            fragment = fragment.getParentFragment();
+        }
+        return fragment;
+    }
+
+    /**
+     * 启动Activity
+     */
+    @Override
+    public void startActivityForResult(Intent intent, int requestCode) {
+        getRootFragment().startActivityForResult(intent, requestCode);
+    }
+}
+```
+
 **RadioButton的坑**
 
 问题现象：关于RadioButton。默认的button是在左边。若想将图片放在右边，可以设置android:button=“@null”,设置.setCompoundDrawable(null,null,drawable,null);将图片显示在右边。然而在4.x的手机上。即使设置了android:button=“@null”，radioButton仍然会显示默认的图片。
@@ -215,7 +338,7 @@ android:descendantFocusability="blocksDescendants"
 
 官方文档也是这样说明：
 
-![官方说明](/img/android-note/1.jpg)
+![官方说明](/img/android-note/p1.jpg)
 
 <p id = "build_2"></p>
 
@@ -286,6 +409,14 @@ db.close(); //这个操作要不要加？
 原因分析：看Toast的源码可以发现，同时显示多个toast时是排队显示的，所以才会出现同时显示多个Toast时很久都不消失的情况；
 
 解决方案：这属于体验问题，很多应用都存在。建议定义一个全局的Toast对象，这样可以避免连续显示Toast时不能取消上一次Toast消息的情况（如果你有连续弹出Toast的情况，避免使用Toast.makeText）；
+
+**android.view.WindowManager$BadTokenException: Unable to add window -- token null is not for an application**
+
+问题现象：使用dagger2注入依赖AlertDialog时出现这个问题；
+
+原因分析：导致报这个错是在于new AlertDialog.Builder(mcontext)，虽然这里的参数是AlertDialog.Builder(Context context)，但我们不能使用getApplicationContext()获得的Context，而必须使用Activity，因为只有一个Activity才能添加一个窗体；
+
+解决方案：将new AlertDialog.Builder(Context context)中的参数用Activity的实例来填充；
 
 **build.gradle中的versionName和versionCode**
 
@@ -363,6 +494,199 @@ db.close(); //这个操作要不要加？
 
 ---
 
+## 编译时的坑
+
+**编译环境的坑**
+
+问题现象：如果在使用Eclipse开发Java项目时，在使用 @Override 出现以下错误：
+
+```xml
+The method *** of type *** must override a superclass method
+```
+
+原因分析：主要是因为你的Compiler是jdk5,(5不支持@Override等形式的批注）只要把它改为6就可以了；
+
+解决方案：将window -> preferences -> java-compiler中的Compiler compliance level修改为6.0。
+
+**Android Studio Caused by java.lang.ClassNotFoundException**
+
+问题现象：项目一直运行的很正常,最近在做友盟社会化分享的时候需要导入jar包，导入相关jar编译没问题一运行APP就报ClassNotFoundException，删除了jar包就一切正常了，当时一直以为是jar引用方法不对，但是后来发现多写几个函数后同样会报错；
+
+原因分析：Android系统中，一个App的所有代码都在一个Dex文件里面。Dex是一个类似Jar的存储了多有Java编译字节码的归档文件。因为Android系统使用Dalvik虚拟机，所以需要把使用Java Compiler编译之后的class文件转换成Dalvik能够执行的class文件。这里需要强调的是，Dex和Jar一样是一个归档文件，里面仍然是Java代码对应的字节码文件。当Android系统启动一个应用的时候，有一步是对Dex进行优化，这个过程有一个专门的工具来处理，叫DexOpt。DexOpt的执行过程是在第一次加载Dex文件的时候执行的。这个过程会生成一个ODEX文件，即Optimised Dex。执行ODex的效率会比直接执行Dex文件的效率要高很多。但是在早期的Android系统中，DexOpt的LinearAlloc存在着限制: Android 2.2和2.3的缓冲区只有5MB，Android 4.x提高到了8MB或16MB。当方法数量过多导致超出缓冲区大小65536时，会造成dexopt崩溃，导致无法安装；
+
+解决方案：
+
+1) 在项目目录下build.gradle中android中添加multiDexEnabled true
+
+![multiDexEnabled true](/img/android-note/p3.png)
+
+2) 集成类Application的类中添加代码MultiDex.install(this);
+
+![MultiDex.install(this)](/img/android-note/p5.png)
+
+**The connection to adb is down**
+
+解决方案：
+
+在任务管理器中强制结束adb.exe进程以及第三方的相关进程，如kadb.exe，重新连接便可:
+
+```xml
+adb kill-server
+adb start-server
+```
+
+**adb无法识别**
+
+解决方案：
+
+终端下输入：
+
+```xml
+lsusb
+```
+
+结果：
+
+```xml
+Bus 001 Device 002: ID 8087:8008 Intel Corp. 
+Bus 002 Device 002: ID 8087:8000 Intel Corp. 
+Bus 003 Device 015: ID 04ca:0061 Lite-On Technology Corp. 
+Bus 003 Device 003: ID 413c:2107 Dell Computer Corp. 
+Bus 003 Device 016: ID 04e8:6860 Samsung Electronics Co., Ltd GT-I9100 Phone [Galaxy S II]
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 002 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 003 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 004 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+```
+
+其中我的手机是Ltd GT-I9100 Phone [Galaxy S II]，记下这一行的04e8:6860
+
+然后输入以下下指令（将其中的ATTR{idVendor}改为04e8，MODE改为6860）：
+
+```xml
+echo '0x1782' | tee -a ~/.android/adb_usb.ini
+
+echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="1782", MODE="0666", GROUP="plugdev"' | tee -a/etc/udev/rules.d/51-android.rules
+
+chmod a+r /etc/udev/rules.d/51-android.rules
+
+service udev restart
+
+adb kill-server
+
+adb start-server
+```
+
+**Kotlin-android: unresolved reference databinding**
+
+解决方案：
+
+Try use this configuration:
+
+In main build.gradle:
+
+```xml
+buildscript {
+    ext.kotlin_version = '<kotlin-version>'
+    ext.android_plugin_version = '2.2.0-alpha4'
+    dependencies {
+        classpath "com.android.tools.build:gradle:$android_plugin_version"
+        //... rest of the content
+    }
+}
+```
+
+App build.gradle:
+
+```xml
+android {
+    dataBinding {
+        enabled = true
+    }
+}
+
+dependencies {
+    kapt "com.android.databinding:compiler:$android_plugin_version"
+}
+
+kapt {
+    generateStubs = true
+}
+```
+
+See [https://stackoverflow.com/questions/33165324/kotlin-android-unresolved-reference-databinding](https://stackoverflow.com/questions/33165324/kotlin-android-unresolved-reference-databinding)
+
+**Kotlin Dagger2 配置使用**
+
+根目录下的build.gradle：
+
+```xml
+buildscript {
+    ext.kotlinVersion = '1.1.2-2'
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:2.3.3'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
+        classpath "org.jetbrains.kotlin:kotlin-android-extensions:$kotlinVersion"
+    }
+}
+```
+
+module下的build.gradle：
+
+```xml
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
+apply plugin: 'kotlin-kapt'
+
+...
+
+dependencies {
+...
+    //dagger2
+    ext.daggerLibVersion = "2.10"
+    compile "com.google.dagger:dagger:$daggerLibVersion"
+    kapt "com.google.dagger:dagger-compiler:$daggerLibVersion"
+
+    //dagger2 android 一个dagger2 关于Android的增强库 可选项
+    kapt "com.google.dagger:dagger-android:$daggerLibVersion"
+    //可选项
+    kapt "com.google.dagger:dagger-android-support:$daggerLibVersion"
+    //可选项
+    kapt "com.google.dagger:dagger-android-processor:$daggerLibVersion"
+}
+```
+
+**Circular dependency between the following tasks**
+
+问题现象：在使用Kotlin 1.1.2-4 plugin时，使用kapt，会出现循环依赖的错误；
+
+解决方案：仅需要将Kotlin 1.1.2-4降级到Kotlin 1.1.2-2版本即可。
+
+根目录下的build.gradle：
+
+```xml
+buildscript {
+    //此处降级
+    ext.kotlinVersion = '1.1.2-2'
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:2.3.3'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
+        classpath "org.jetbrains.kotlin:kotlin-android-extensions:$kotlinVersion"
+    }
+}
+```
+
+<p id = "build_4"></p>
+
+---
+
 ## 开源项目中的坑
 
 **FancyCoverFlow**
@@ -387,7 +711,11 @@ db.close(); //这个操作要不要加？
 
 **Glide**
 
-Google推荐的图片加载库，专注于流畅的滚动。Glide在Listview或GridView等列表中使用时，需设置 .dontAnimate().into(ImageView)。清除默认动画，否则图片显示会有异常。
+Google推荐的图片加载库，专注于流畅的滚动。Glide在Listview或GridView等列表中使用时，需设置.dontAnimate().into(ImageView)。清除默认动画，否则图片显示会有异常。
+
+**Crosswalk**
+
+Crosswalk是一款开源的Web引擎，其基于 Chromium/Blink 的应用运行环境，对于混合开发的轻量级应用尤为受欢迎。缺点是需要承受APK激增 20M~ OR 40M~ 体积；另外我在使用XWalkView播放html5的video时，在Tablet系统上运行，会出现视频被一块黑色区域挡住的问题，Phone或者TV都没有此问题，目前尚未找到解决方案。
 
 ## End
 
