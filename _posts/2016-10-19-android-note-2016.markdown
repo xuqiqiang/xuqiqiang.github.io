@@ -683,6 +683,17 @@ buildscript {
 }
 ```
 
+**java.lang.NoClassDefFoundError: com.android.tools.fd.runtime.AppInfo**
+
+问题现象：Android Studio直接从build文件目录下拿到apk装到目标机器上，出现了异常报错的情况；
+
+原因分析：Android Studio在调试的时候Instance Run给程序添加了一些自己的代码，但脱离Android Studio去安装到目标机器时，它就肯定找不到这个类；
+
+解决方案：
+
+* 在Android Studio中关闭Instance Run功能，并且清除build目录。然后再进行Run的安装，此时可以直接从新生成的build目录提取apk，安装到目标机器上；
+* clean整个工程，然后再Build APK，此时生成新的APK在build目录下，提取APK安装到目录机也不会报错了；
+
 <p id = "build_4"></p>
 
 ---
