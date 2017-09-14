@@ -1,0 +1,479 @@
+---
+layout:     post
+title:      "Android IPC机制"
+subtitle:   "如果要研究Frameworks，必须先对Binder机制有一定的认识，否则是无法看懂Frameworks源码的"
+date:       2016-05-25 12:00:00
+author:     "SnailStudio"
+header-img: "img/post-bg-2015.jpg"
+tags:
+    - C++
+    - Android
+---
+
+> “Yeah It's on. ”
+
+
+## 为什么Android要采用Binder作为IPC机制
+
+我们知道，Android系统是基于Linux内核的，而linux内核继承和兼容了丰富的Unix系统进程间通信（IPC）机制。有传统的管道（Pipe）、信号（Signal）和跟踪（Trace），这三项通信手段只能用于父进程与子进程之间，或者兄弟进程之间；后来又增加了命令管道（Named Pipe），使得进程间通信不再局限于父子进程或者兄弟进程之间；为了更好地支持商业应用中的事务处理，在AT&T的Unix系统V中，又增加了三种称为“System V IPC”的进程间通信机制，分别是报文队列（Message）、共享内存（Share Memory）和信号量（Semaphore）；后来BSD Unix对“System V IPC”机制进行了重要的扩充，提供了一种称为插口（Socket）的进程间通信机制。若想详细了解这些进程间通信机制，建议参考[《Linux内核源代码情景分析》](#documents)一书。
+
+但是Android系统没有采用上述提到的各种进程间通信机制，而是采用Binder机制，难道Linux社区那么多优秀人员都没有考虑到有Binder这样一个更优秀的方案，是google太过于牛B吗？
+
+接下来正面回答这个问题，从5个角度来展开对Binder的分析：
+
+（1）从性能的角度<br/>
+数据拷贝次数：Binder数据拷贝只需要一次，而管道、消息队列、Socket都需要2次，但共享内存方式一次内存拷贝都不需要；从性能角度看，Binder性能仅次于共享内存。<br/>
+（2）从稳定性的角度<br/>
+Binder是基于C/S架构的，简单解释下C/S架构，是指客户端(Client)和服务端(Server)组成的架构，Client端有什么需求，直接发送给Server端去完成，架构清晰明朗，Server端与Client端相对独立，稳定性较好；而共享内存实现方式复杂，没有客户与服务端之别， 需要充分考虑到访问临界资源的并发同步问题，否则可能会出现死锁等问题；从这稳定性角度看，Binder架构优越于共享内存。<br/>
+仅仅从以上两点，各有优劣，还不足以支撑google去采用binder的IPC机制，那么更重要的原因是：<br/>
+（3）从安全的角度<br/>
+传统Linux IPC的接收方无法获得对方进程可靠的UID/PID，从而无法鉴别对方身份；而Android作为一个开放的开源体系，拥有非常多的开发平台，App来源甚广，因此手机的安全显得额外重要；对于普通用户，绝不希望从App商店下载偷窥隐射数据、后台造成手机耗电等等问题，传统Linux IPC无任何保护措施，完全由上层协议来确保。<br/>
+Android为每个安装好的应用程序分配了自己的UID，故进程的UID是鉴别进程身份的重要标志，前面提到C/S架构，**Android系统中对外只暴露Client端，Client端将任务发送给Server端，Server端会根据权限控制策略，判断UID/PID是否满足访问权限，目前权限控制很多时候是通过弹出权限询问对话框，让用户选择是否运行。**Android 6.0，也称为Android M，在6.0之前的系统是在App第一次安装时，会将整个App所涉及的所有权限一次询问，只要留意看会发现很多App根本用不上通信录和短信，但在这一次性权限权限时会包含进去，让用户拒绝不得，因为拒绝后App无法正常使用，而一旦授权后，应用便可以胡作非为。<br/>
+针对这个问题，google在Android M做了调整，不再是安装时一并询问所有权限，而是在App运行过程中，需要哪个权限再弹框询问用户是否给相应的权限，对权限做了更细地控制，让用户有了更多的可控性，但**同时也带来了另一个用户诟病的地方，那也就是权限询问的弹框的次数大幅度增多**。对于Android M平台上，有些App开发者可能会写出让手机异常频繁弹框的App，企图直到用户授权为止，这对用户来说是不能忍的，用户最后吐槽的可不光是App，还有Android系统以及手机厂商，有些用户可能就跳果粉了，这还需要广大Android开发者以及手机厂商共同努力，共同打造安全与体验俱佳的Android手机。<br/>
+Android中权限控制策略有SELinux等多方面手段，下面列举从Binder的一个角度的权限控制：<br/>
+[Android源码的Binder权限是如何控制](https://www.zhihu.com/question/41003297/answer/89328987?from=profile_answer_card)<br/>
+传统IPC只能由用户在数据包里填入UID/PID；另外，可靠的身份标记只有由IPC机制本身在内核中添加。其次传统IPC访问接入点是开放的，无法建立私有通道。从安全角度，Binder的安全性更高。<br/>
+说到这，可能有人要反驳，Android就算用了Binder架构，而现如今Android手机的各种流氓软件，不就是干着这种偷窥隐射，后台偷偷跑流量的事吗？没错，确实存在，但这不能说Binder的安全性不好，因为Android系统仍然是掌握主控权，可以控制这类App的流氓行为，只是对于该采用何种策略来控制，在这方面android的确存在很多有待进步的空间，这也是google以及各大手机厂商一直努力改善的地方之一。在Android 6.0，google对于app的权限问题作为较多的努力，大大收紧的应用权限；另外，在Google举办的Android Bootcamp 2016大会中，google也表示在Android 7.0 （也叫Android N）的权限隐私方面会进一步加强加固，比如SELinux，Memory safe language(还在research中)等等，在今年的5月18日至5月20日，google将推出Android N。<br/>
+话题扯远了，继续说Binder。<br/>
+（4）从语言层面的角度<br/>
+大家多知道Linux是基于C语言(面向过程的语言)，而Android是基于Java语言(面向对象的语句)，而对于Binder恰恰也符合面向对象的思想，将进程间通信转化为通过对某个Binder对象的引用调用该对象的方法，而其独特之处在于Binder对象是一个可以跨进程引用的对象，它的实体位于一个进程中，而它的引用却遍布于系统的各个进程之中。可以从一个进程传给其它进程，让大家都能访问同一Server，就像将一个对象或引用赋值给另一个引用一样。Binder模糊了进程边界，淡化了进程间通信过程，整个系统仿佛运行于同一个面向对象的程序之中。从语言层面，Binder更适合基于面向对象语言的Android系统，对于Linux系统可能会有点“水土不服”。<br/>
+另外，Binder是为Android这类系统而生，而并非Linux社区没有想到Binder IPC机制的存在，对于Linux社区的广大开发人员，我还是表示深深佩服，让世界有了如此精湛而美妙的开源系统。也并非Linux现有的IPC机制不够好，相反地，经过这么多优秀工程师的不断打磨，依然非常优秀，每种Linux的IPC机制都有存在的价值，同时在Android系统中也依然采用了大量Linux现有的IPC机制，根据每类IPC的原理特性，因时制宜，不同场景特性往往会采用其下最适宜的。比如在Android OS中的Zygote进程的IPC采用的是Socket（套接字）机制，Android中的Kill Process采用的signal（信号）机制等等。而Binder更多则用在system_server进程与上层App层的IPC交互。<br/>
+(5) 从公司战略的角度<br/>
+总所周知，Linux内核是开源的系统，所开放源代码许可协议GPL保护，该协议具有“病毒式感染”的能力，怎么理解这句话呢？受GPL保护的Linux Kernel是运行在内核空间，对于上层的任何类库、服务、应用等运行在用户空间，一旦进行SysCall（系统调用），调用到底层Kernel，那么也必须遵循GPL协议。<br/>
+而Android 之父 Andy Rubin对于GPL显然是不能接受的，为此，Google巧妙地将GPL协议控制在内核空间，将用户空间的协议采用Apache-2.0协议（允许基于Android的开发商不向社区反馈源码），同时在GPL协议与Apache-2.0之间的Lib库中采用BSD证授权方法，有效隔断了GPL的传染性，仍有较大争议，但至少目前缓解Android，让GPL止步于内核空间，这是Google在GPL Linux下 开源与商业化共存的一个成功典范。<br/>
+有了这些铺垫，我们再说说Binder的今世前缘<br/>
+Binder是基于开源的OpenBinder实现的，OpenBinder是一个开源的系统IPC机制,最初是由Be Inc.开发，接着由Palm, Inc.公司负责开发，现在OpenBinder的作者在Google工作，既然作者在Google公司，在用户空间采用Binder 作为核心的IPC机制，再用Apache-2.0协议保护，自然而然是没什么问题，减少法律风险，以及对开发成本也大有裨益的，那么从公司战略角度，Binder也是不错的选择。<br/>
+综合上述5点，可知Binder是Android系统上层进程间通信的不二选择。
+
+## Android IPC机制详解
+
+#### Binder机制简介
+
+![幻灯片演示](/img/binder/p1.JPG)
+
+![幻灯片演示](/img/binder/p2.JPG)
+
+![幻灯片演示](/img/binder/p3.JPG)
+
+(1)当一个服务进程启动后，需要将其中的Service注册到ServiceManager中，此时底层会有两个变化：
+
+* 在Binder驱动中生存一个Service的Binder引用
+* 后台启动一个监听线程，监听Binder驱动发过来的消息
+
+(2)Client想和某一个Service交互，需要向ServiceManager申请获得该Service在Binder中的引用，并存放在自身的mRemote变量中，之后通过mRemote调用。
+
+![幻灯片演示](/img/binder/p4.JPG)
+
+客户端如何和服务端交互：
+
+客户端获取服务端在Binder驱动中的应用，这个引用改写了transact方法(这个方法来自于IBinder)，这个方法通过调用onTransact方法实现如下功能：首先向服务端发送一个消息调用，并挂起当前线程，然后等待服务端执行完毕返回，最后继续执行客户端线程。
+
+---
+
+#### IPC demo分析
+
+![幻灯片演示](/img/binder/p5.JPG)
+
+![幻灯片演示](/img/binder/p6.JPG)
+
+Client端生成Proxy：
+
+IMusicPlayerService.Stub.asInterface(IBinder)<br/>
+---><br/>
+new IMusicPlayerService.Stub.Proxy(IBinder)
+
+![幻灯片演示](/img/binder/p7.JPG)
+
+Stub.TRANSACTION_start是在Stub类中定义的一个变量，用来标示函数的。
+static final int TRANSACTION_start = (android.os.IBinder.FIRST_CALL_TRANSACTION + 0);
+
+---
+
+#### Binder机制详解
+
+![幻灯片演示](/img/binder/p8.JPG)
+
+* Client、Server和Service Manager实现在用户空间中，Binder驱动程序实现在内核空间中
+* Binder驱动程序和Service Manager在Android平台中已经实现，开发者只需要在用户空间实现自己的Client和Server
+* Binder驱动程序提供设备文件/dev/binder与用户空间交互，Client、Server和Service Manager通过open和ioctl文件操作函数与Binder驱动程序进行通信
+* Client和Server之间的进程间通信通过Binder驱动程序间接实现
+* Service Manager是一个守护进程，用来管理Server，并向Client提供查询Server接口的能力
+
+![幻灯片演示](/img/binder/p9.JPG)
+
+binder通信是一种client-server的通信结构：
+
+* 从表面上来看，是client通过获得一个server的代理接口，对server进行直接调用；
+* 实际上，代理接口中定义的方法与server中定义的方法是一一对应的；
+* client调用某个代理接口中的方法时，代理接口的方法会将client传递的参数打包成为Parcel对象；
+* 代理接口将该Parcel发送给内核中的binder driver.
+* server会读取binder driver中的请求数据，如果是发送给自己的，解包Parcel对象，处理并将结果返回；
+* 整个的调用过程是一个同步过程，在server处理的时候，client会block住。
+
+---
+
+#### Service Manager
+
+![幻灯片演示](/img/binder/p10.JPG)
+
+Service Manager在用户空间的源代码位于frameworks/base/cmds/servicemanager目录下，主要是由binder.h、binder.c和service_manager.c三个文件组成。Service Manager的入口位于service_manager.c文件中的main函数。
+
+(打开Binder设备文件在后面详述)<br/>
+Service Manager是成为Android进程间通信（IPC）机制Binder守护进程的过程是这样的：<br/>
+        1. 打开/dev/binder文件：open("/dev/binder", O_RDWR);<br/>
+        2. 建立128K内存映射：mmap(NULL, mapsize, PROT_READ, MAP_PRIVATE, bs->fd, 0);<br/>
+        3. 通知Binder驱动程序它是守护进程：binder_become_context_manager(bs);<br/>
+        4. 进入循环等待请求的到来：binder_loop(bs, svcmgr_handler);
+
+![幻灯片演示](/img/binder/p11.JPG)
+
+![幻灯片演示](/img/binder/p12.JPG)
+
+任何service在被使用之前，均要向SM(Service Manager)注册，同时客户端需要访问某个service时，应该首先向SM查询是否存在该服务。如果SM存在这个service，那么会将该service的handle返回给client，handle是每个service的唯一标识符。
+这个进程的主要工作如下：<br/>
+1.初始化binder，打开/dev/binder设备；在内存中为binder映射128K字节空间；<br/>
+2.指定SM对应的代理binder的handle为0，当client尝试与SM通信时，需要创建一个handle为0的代理binder，这里的代理binder其实就是第一节中描述的那个代理接口；<br/>
+3.通知binder driver(BD)使SM成为BD的context manager；<br/>
+4.维护一个死循环，在这个死循环中，不停地去读内核中binder driver，查看是否有可读的内容；即是否有对service的操作要求, 如果有，则调用svcmgr_handler回调来处理请求的操作。<br/>
+5.SM维护了一个svclist列表来存储service的信息。
+
+---
+
+#### Server和Client获得Service Manager接口
+
+![幻灯片演示](/img/binder/p13.JPG)
+
+ProcessState::self()->getContextObject(NULL)看起来简短，却暗藏玄机，这里作简要描述。<br/>
+        首先是调用ProcessState::self函数，self函数是ProcessState的静态成员函数，它的作用是返回一个全局唯一的ProcessState实例变量，就是单例模式了，这个变量名为gProcess。如果gProcess尚未创建，就会执行创建操作。<br/>
+        接着调用gProcess->getContextObject函数来获得一个句柄值为0的Binder引用，即BpBinder了。
+
+![幻灯片演示](/img/binder/p14.JPG)
+
+在ProcessState的构造函数中，会通过open文件操作函数打开设备文件/dev/binder，并且返回来的设备文件描述符保存在成员变量mDriverFD中；通过mmap来把设备文件/dev/binder映射到内存中。
+
+mmap函数调用完成之后，Binder驱动程序就为当前进程预留了BINDER_VM_SIZE大小的内存空间了。
+
+```c
+#define BINDER_VM_SIZE ((1*1024*1024) - (4096 *2))
+```
+
+open_driver()详解：
+
+* 创建ProcessState引用proc (sp<ProcessState>& proc)
+
+* 调用binder_get_thread创建好proc->threads红黑树。
+
+* 然后再调用ioctl文件控制函数来分别执行BINDER_VERSION和BINDER_SET_MAX_THREADS两个命令来和Binder驱动程序进行交互：
+
+前者用于获得当前Binder驱动程序的版本号：
+
+```c
+put_user(BINDER_CURRENT_PROTOCOL_VERSION, &((struct binder_version *)ubuf)->protocol_version)
+```
+
+只是将BINDER_CURRENT_PROTOCOL_VERSION写入到传入的参数arg指向的用户缓冲区中去就返回了。
+
+```c
+#define BINDER_CURRENT_PROTOCOL_VERSION 7
+
+struct binder_version {
+    /* driver protocol version -- increment with incompatible change */
+    signed long protocol_version;
+};
+```
+
+后者用于通知Binder驱动程序，最多可同时启动15个线程来处理Client端的请求：
+
+```c
+copy_from_user(&proc->max_threads, ubuf, sizeof(proc->max_threads))
+```
+
+把用户传进来的参数保存在proc->max_threads中。
+
+![幻灯片演示](/img/binder/p15.JPG)
+
+BpServiceManager类继承了BpInterface<IServiceManager>类，BpInterface是一个模板类，它定义在frameworks/base/include/binder/IInterface.h文件中：
+
+```c
+template<typename INTERFACE>
+class BpInterface : public INTERFACE, public BpRefBase
+{
+public:
+	BpInterface(const sp<IBinder>& remote);
+
+protected:
+	virtual IBinder* onAsBinder();
+};
+```
+
+IServiceManager类继承了IInterface类，而IInterface类和BpRefBase类又分别继承了RefBase类。在BpRefBase类中，有一个成员变量mRemote，它的类型是IBinder*，实现类为BpBinder，它表示一个Binder引用，引用句柄值保存在BpBinder类的mHandle成员变量中。BpBinder类通过IPCThreadState类来和Binder驱动程序并互，而IPCThreadState又通过它的成员变量mProcess来打开/dev/binder设备文件，mProcess成员变量的类型为ProcessState。ProcessState类打开设备/dev/binder之后，将打开文件描述符保存在mDriverFD成员变量中，以供后续使用。
+
+![幻灯片演示](/img/binder/p16.JPG)
+
+---
+
+#### Server启动过程分析
+
+我们通过一个具体的例子来说明Binder机制中Server的启动过程。我们知道，在Android系统中，提供了多媒体播放的功能，这个功能是以服务的形式来提供的。这里，我们就通过分析MediaPlayerService的实现来了解Media Server的启动过程。
+
+首先，看一下MediaPlayerService的类图，以便我们理解下面要描述的内容。
+
+![幻灯片演示](/img/binder/p17.JPG)
+
+MediaPlayerService继承于BnMediaPlayerService类，BnMediaPlayerService实际是继承了IMediaPlayerService和BBinder类。IMediaPlayerService和BBinder类又分别继承了IInterface和IBinder类，IInterface和IBinder类又同时继承了RefBase类。
+
+实际上，BnMediaPlayerService并不是直接接收到Client处发送过来的请求，而是使用了IPCThreadState接收Client处发送过来的请求，而IPCThreadState又借助了ProcessState类来与Binder驱动程序交互。IPCThreadState接收到了Client处的请求后，就会调用BBinder类的transact函数，并传入相关参数，BBinder类的transact函数最终调用BnMediaPlayerService类的onTransact函数，于是，就开始真正地处理Client的请求了。
+
+![幻灯片演示](/img/binder/p18.JPG)
+
+![幻灯片演示](/img/binder/p19.JPG)
+
+这里又调用了IPCThreadState::transact进执行实际的操作。注意，这里的mHandle为0，code为ADD_SERVICE_TRANSACTION。ADD_SERVICE_TRANSACTION是上面以参数形式传进来的，那mHandle为什么是0呢？因为这里表示的是Service Manager远程接口，它的句柄值一定是0。
+
+函数首先调用writeTransactionData函数准备好一个struct binder_transaction_data结构体变量，这个是等一下要传输给Binder驱动程序的。
+
+然后waitForResponse主要调用了talkWithDriver函数来与Binder驱动程序进行交互，通过ioctl(mProcess->mDriverFD, BINDER_WRITE_READ, &bwr)进行到Binder驱动程序的binder_ioctl函数，进入到binder_thread_write函数中
+
+![幻灯片演示](/img/binder/p20.JPG)
+
+![幻灯片演示](/img/binder/p21.JPG)
+
+返回到IPCThreadState::waitForResponse函数中。在IPCThreadState::waitForResponse函数，先是从mIn读出一个整数，这个便是BR_NOOP了，这是一个空操作，什么也不做。然后继续进入IPCThreadState::talkWithDriver函数中。尚有一个整数BR_TRANSACTION_COMPLETE未读出。
+
+最后bwr.write_size和bwr.read_size均为0，IPCThreadState::talkWithDriver函数什么也不做，直接返回到IPCThreadState::waitForResponse函数中。在IPCThreadState::waitForResponse函数，又继续从mIn读出一个整数，这个便是BR_TRANSACTION_COMPLETE
+
+![幻灯片演示](/img/binder/p22.JPG)
+
+这里有一个非常重要的地方，是Binder进程间通信机制的精髓所在：
+
+```c
+tr.data.ptr.buffer = (void *)t->buffer->data + proc->user_buffer_offset;  
+tr.data.ptr.offsets = tr.data.ptr.buffer + ALIGN(t->buffer->data_size, sizeof(void *));  
+```
+
+t->buffer->data所指向的地址是内核空间的，现在要把数据返回给Service Manager进程的用户空间，而Service Manager进程的用户空间是不能访问内核空间的数据的，所以这里要作一下处理。怎么处理呢？我们在学面向对象语言的时候，对象的拷贝有深拷贝和浅拷贝之分，深拷贝是把另外分配一块新内存，然后把原始对象的内容搬过去，浅拷贝是并没有为新对象分配一块新空间，而只是分配一个引用，而个引用指向原始对象。Binder机制用的是类似浅拷贝的方法，通过在用户空间分配一个虚拟地址，然后让这个用户空间虚拟地址与 t->buffer->data这个内核空间虚拟地址指向同一个物理地址，这样就可以实现浅拷贝了。怎么样用户空间和内核空间的虚拟地址同时指向同一个物理地址呢？这里只要将t->buffer->data加上一个偏移值proc->user_buffer_offset就可以得到t->buffer->data对应的用户空间虚拟地址了。调整了tr.data.ptr.buffer的值之后，不要忘记也要一起调整tr.data.ptr.offsets的值。
+
+svcmgr_handler:
+
+回忆一下，在BpServiceManager::addService时，传给Binder驱动程序的参数为：
+
+```c
+writeInt32(IPCThreadState::self()->getStrictModePolicy() | STRICT_MODE_PENALTY_GATHER);
+writeString16("android.os.IServiceManager");
+writeString16("media.player");
+writeStrongBinder(new MediaPlayerService());
+```
+
+这里的语句：
+
+```c
+strict_policy = bio_get_uint32(msg);
+s = bio_get_string16(msg, &len);
+s = bio_get_string16(msg, &len);
+ptr = bio_get_ref(msg);
+```
+
+就是依次把它们读取出来了。
+
+do_add_service：
+
+把MediaPlayerService这个Binder实体的引用写到一个struct svcinfo结构体中，主要是它的名称和句柄值，然后插入到链接svclist的头部去。这样，Client来向Service Manager查询服务接口时，只要给定服务名称，Service Manger就可以返回相应的句柄值了。
+
+![幻灯片演示](/img/binder/p23.JPG)
+
+---
+
+#### Client获得Server远程接口过程分析
+
+这里，我们仍然是通过Android系统中自带的多媒体播放器为例子来说明Client是如何通过IServiceManager::getService接口来获得MediaPlayerService这个Server的远程接口的。
+
+我们要举例子说明的Client便是MediaPlayer了，它声明和实现在frameworks/base/include/media/mediaplayer.h和frameworks/base/media/libmedia/mediaplayer.cpp文件中。MediaPlayer继承于IMediaDeathNotifier类，这个类声明和实现在frameworks/base/include/media/IMediaDeathNotifier.h和frameworks/base/media/libmedia//IMediaDeathNotifier.cpp文件中，里面有一个静态成员函数getMeidaPlayerService，它通过IServiceManager::getService接口来获得MediaPlayerService的远程接口。
+
+![幻灯片演示](/img/binder/p24.JPG)
+
+![幻灯片演示](/img/binder/p25.JPG)
+
+![幻灯片演示](/img/binder/p26.JPG)
+
+回忆一下，在BpServiceManager::checkService时，传给Binder驱动程序的参数为：
+
+```c
+writeInt32(IPCThreadState::self()->getStrictModePolicy() | STRICT_MODE_PENALTY_GATHER);
+writeString16("android.os.IServiceManager");
+writeString16("media.player");
+```
+
+这里的语句：
+
+```c
+strict_policy = bio_get_uint32(msg);
+s = bio_get_string16(msg, &len);
+s = bio_get_string16(msg, &len);
+```
+
+其中，会验证一下传进来的第二个参数，即"android.os.IServiceManager"是否正确，这个是验证RPC头，注释已经说得很清楚了。
+
+最后，就是调用do_find_service函数查找是存在名称为"media.player"的服务了。
+
+![幻灯片演示](/img/binder/p27.JPG)
+
+![幻灯片演示](/img/binder/p28.JPG)
+
+```c
+android::sp<IMediaPlayerService> IMediaPlayerService::asInterface(const android::sp<android::IBinder>& obj)
+{
+    android::sp<IServiceManager> intr;
+    if (obj != NULL) {
+        intr = static_cast<IMediaPlayerService*>(
+            obj->queryLocalInterface(IMediaPlayerService::descriptor).get());
+        if (intr == NULL) {
+            intr = new BpMediaPlayerService(obj);
+        }
+    }
+    return intr;
+}
+```
+
+这里的obj就是BpBinder，而BpBinder::queryLocalInterface返回NULL，因此就创建了一个BpMediaPlayerService对象。
+
+---
+
+#### Framworks层Java接口分析
+
+我们要获取的Service Manager的Java远程接口是一个ServiceManagerProxy对象的IServiceManager接口。我们现在就来看看ServiceManagerProxy类是长什么样子的：
+
+![幻灯片演示](/img/binder/p29.JPG)
+
+这里可以看出，ServiceManagerProxy类实现了IServiceManager接口，IServiceManager提供了getService和addService两个成员函数来管理系统中的Service。从ServiceManagerProxy类的构造函数可以看出，它需要一个BinderProxy对象的IBinder接口来作为参数。因此，要获取Service Manager的Java远程接口ServiceManagerProxy，首先要有一个BinderProxy对象。
+
+![幻灯片演示](/img/binder/p30.JPG)
+
+ServiceManager类有一个静态成员函数getIServiceManager，它的作用就是用来获取Service Manager的Java远程接口ServiceManagerProxy了，而这个函数又是通过ServiceManagerNative来获取Service Manager的Java远程接口的。
+
+![幻灯片演示](/img/binder/p31.JPG)
+
+![幻灯片演示](/img/binder/p32.JPG)
+
+```c
+sp<IBinder> b = ProcessState::self()->getContextObject(NULL);
+```
+
+相当于是：
+
+```c
+sp<IBinder> b = new BpBinder(0);
+``` 
+
+javaObjectForIBinder:
+
+```c
+val->attachObject(&gBinderProxyOffsets, refObject,
+                jnienv_to_javavm(env), proxy_cleanup);
+```
+
+bindernative_offsets_t gBinderOffsets <- int_register_android_os_Binder
+binderproxy_offsets_t gBinderProxyOffsets <- int_register_android_os_BinderProxy
+
+![幻灯片演示](/img/binder/p33.JPG)
+
+![幻灯片演示](/img/binder/p34.JPG)
+
+这里我们可以看到IHelloService.aidl这个文件编译后的真面目，原来就是根据IHelloService接口的定义生成相应的Stub和Proxy类，这个就是我们熟悉的Binder机制的内容了，即实现这个HelloService的Server必须继续于这里的IHelloService.Stub类，而这个HelloService的远程接口就是这里的IHelloService.Stub.Proxy对象获得的IHelloService接口。接下来的内容，我们就可以看到IHelloService.Stub和IHelloService.Stub.Proxy是怎么创建或者使用的。
+
+![幻灯片演示](/img/binder/p35.JPG)
+
+![幻灯片演示](/img/binder/p36.JPG)
+
+在frameworks/base/services/java/com/android/server/SystemServer.java文件中，定义了SystemServer类。SystemServer对象是在系统启动的时候创建的，它被创建的时候会启动一个线程来创建HelloService，并且把它添加到Service Manager中去。
+
+![幻灯片演示](/img/binder/p37.JPG)
+
+```c
+    public void addService(String name, IBinder service)
+        throws RemoteException {
+            Parcel data = Parcel.obtain();
+            Parcel reply = Parcel.obtain();
+            data.writeInterfaceToken(IServiceManager.descriptor);
+            data.writeString(name);
+            data.writeStrongBinder(service);
+            mRemote.transact(ADD_SERVICE_TRANSACTION, data, reply, 0);
+            reply.recycle();
+            data.recycle();
+    }
+```
+
+我们再来看看BinderProxy.transact函数的实现：
+
+```c
+final class BinderProxy implements IBinder {
+    ......
+
+    public native boolean transact(int code, Parcel data, Parcel reply,  
+                                int flags) throws RemoteException;
+
+    ......
+}
+```
+
+这里的transact成员函数又是一个JNI方法，它定义在frameworks/base/core/jni/android_util_Binder.cpp文件中：
+
+```c
+static jboolean android_os_BinderProxy_transact(JNIEnv* env, jobject obj,
+                        jint code, jobject dataObj,
+                        jobject replyObj, jint flags)
+{
+    ......
+    IBinder* target = (IBinder*)
+        env->GetIntField(obj, gBinderProxyOffsets.mObject);
+    status_t err = target->transact(code, *data, reply, flags);
+
+}
+```
+
+![幻灯片演示](/img/binder/p38.JPG)
+
+```c
+    public IBinder getService(String name) throws RemoteException {
+        Parcel data = Parcel.obtain();
+        Parcel reply = Parcel.obtain();
+        data.writeInterfaceToken(IServiceManager.descriptor);
+        data.writeString(name);
+        mRemote.transact(GET_SERVICE_TRANSACTION, data, reply, 0);
+        IBinder binder = reply.readStrongBinder();
+        reply.recycle();
+        data.recycle();
+        return binder;
+    }
+```
+
+![幻灯片演示](/img/binder/p39.JPG)
+
+![幻灯片演示](/img/binder/p40.JPG)
+
+通过mRemote.transact来请求HelloService执行TRANSACTION_getVal操作。这里的mRemote是一个BinderProxy对象，这是我们在前面获取HelloService的Java远程接口的过程中创建的。
+        BinderProxy.transact函数是一个JNI方法，我们在前面已经介绍过了，这里不再累述。最过调用到Binder驱动程序，Binder驱动程序唤醒HelloService这个Server。前面我们在介绍HelloService的启动过程时，曾经提到，HelloService这个Server线程被唤醒之后，就会调用JavaBBinder类的onTransact函数
+
+
+曾经介绍过，JavaBBinder类里面的成员变量mObject就是HelloService类的一个实例对象了。因此，这里通过语句：
+
+```c
+jboolean res = env->CallBooleanMethod(mObject, gBinderOffsets.mExecTransact,
+            code, (int32_t)&data, (int32_t)reply, flags);
+```
+
+就调用了HelloService.execTransact函数
+
+![幻灯片演示](/img/binder/p41.JPG)
+
+<p id = "documents"></p>
+
+---
+
+## 参考资料
+
+[《Linux内核源代码情景分析》](http://download.csdn.net/download/gqb666/5172556)<br/>
+[《Android内核剖析》](http://download.csdn.net/download/anerle2012/7310907)<br/>
+[《Android深入浅出之Binder机制》](http://www.cnblogs.com/innost/archive/2011/01/09/1931456.html)<br/>
+[《Android进程间通信(IPC)机制Binder简要介绍和学习计划》](http://blog.csdn.net/luoshengyang/article/details/6618363/)
+
+—— SnailStudio 后记于 2017.5
